@@ -14,6 +14,7 @@ import matplotlib.path as mpath
 import csv
 import random
 import logging
+import argparse
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -21,6 +22,15 @@ base_dir = '/eccodata'
 grid_dir = f'{base_dir}/Version4/Release3_alt/nctiles_grid'
 ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
 day_mean_dir = f'{base_dir}/Version4/Release3_alt/nctiles_monthly'
+
+
+def usage():
+    parser = argparse.ArgumentParser(description='Compute particle movements within one tile')
+    parser.add_argument('inputfile')
+    parser.add_argument('-k', '--k', type=int, default=0, help='k layer')
+    parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
+    args = parser.parse_args()
+    return args
 
 
 def outOfTile(x,y):
@@ -119,11 +129,14 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
 # Above counter increments the particle count                
 
 
-
+args = usage()
+input_file = args.inputfile
+k = args.k
+tile = args.tile
 
 results = []
 #input_file = 'klawinput.csv'
-input_file = 'testing.csv'
+#input_file = 'testing.csv'
 with open(input_file) as csv_file:
     csv_reader = csv.DictReader(csv_file, delimiter=',')
     particle = 0
@@ -134,7 +147,7 @@ with open(input_file) as csv_file:
 
         # With recursive_load_ecco_var_from_years_nc one can specify one or more variables to load, one or more years to load, while also requesting only a subset of tiles and vertical levels.
       # ecco.recursive_load_ecco_var_from_years_nc(d
-        particle_result = particle_positions(particle, xoge, yoge, range(1992,2015))
+        particle_result = particle_positions(particle, xoge, yoge, range(1992,2015), tile=args.tile, k=args.k)
         results.extend(particle_result)
 
         particle += 1

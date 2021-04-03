@@ -12,6 +12,7 @@ import cartopy.feature as cfeature
 import ecco_v4_py as ecco
 import matplotlib.path as mpath
 import csv
+import random
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -21,8 +22,37 @@ grid_dir = f'{base_dir}/Version4/Release3_alt/nctiles_grid'
 ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
 day_mean_dir = f'{base_dir}/Version4/Release3_alt/nctiles_monthly'
 
+
+def move_1month(x0, y0, uvel, vvel, fudge=False):
+    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
+    dotx = float(x0) + uvel * month_vel_to_pixel
+    doty = float(y0) + vvel * month_vel_to_pixel
+    if fudge:
+        # Fudge around half a pixel
+        dotx += random.uniform(-0.5, 0.5)
+        doty += random.uniform(-0.5, 0.5)
+    return (dotx, doty)
+
+
+def outOfTile(x,y):
+    if y < 0:
+        logging.debug("stuck on bottom")
+        return True
+    elif y > 90:
+        logging.debug("stuck on top")
+        return True
+    elif x < 0:
+        logging.debug("stuck on left")
+        return True
+    elif x > 90:
+        logging.debug("stuck on right")
+        return True
+    else:
+        return False
+
+
 counter = 0
-def particle_positions(particle, xoge0, yoge0, year_range, tile=10):
+def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
     monthly = []
     xoge = xoge0
     yoge = yoge0
@@ -33,144 +63,41 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10):
                 #k_subset = [0], \
                 #tiles_to_load = [10], \
 
-        for month in range (0, 12):   # 12 vs 11
+        for month in range (12):   # 12 vs 11
             counter += 1
             
             logging.debug(" ")
             logging.debug(" ")
-            logging.debug("--------")
-            logging.debug("PARTICLE : " + str(particle) + " STARTING COORD : " + str(particle) + "  YEAR : " + str(year) + "  MONTH : " + str(month+1))
-
-            #ecco_vars = \
-            #    ecco.recursive_load_ecco_var_from_years_nc(day_mean_dir,\
-            #                                                vars_to_load=['UVEL', 'VVEL'], \
-            #                                                years_to_load=year,\
-            #                                                dask_chunk=False)
-            
+            logging.debug(" --------")
+            logging.debug(f" PARTICLE {particle} STARTING COORD ({xoge},{yoge}) {year}/{month+1}")
 
             
             ecco_ds = xr.merge((ecco_grid , ecco_vars))
-
             ecco_ds.attrs = []
 
-            uvel_dataset = xr.merge((ecco_grid , ecco_vars))
-            uvel_dataset.attrs = []
+            uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
+            vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
 
-            uvel_A = ecco_ds.UVEL
-            uvel_B = ecco_ds['UVEL']
-            uvel_arr = uvel_A.values
+            logging.debug(f' (x,y)=({xoge},{yoge}), (uvel,vvel)=({uvel},{vvel})')
 
-            vvel_A = ecco_ds.VVEL
-            vvel_B = ecco_ds['VVEL']
-            vvel_arr = vvel_A.values    
-
-            #-------------------
-            # fig=plt.figure(figsize=(9, 9))
-            # tile_num=10
-            # # pull out lats and lons
-            # lons = np.copy(ecco_ds.XC.sel(tile=tile_num))
-
-            # lons[lons < 0] = lons[lons < 0]+360
-            # lats = ecco_ds.YC.sel(tile=tile_num)
-            # tile_to_plot = ecco_ds.UVEL.isel(tile=tile_num, time=month, k=0)
-
-
-            # tile_to_plot= tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile_num,k=0) !=0, np.nan)
-
-            # plt.pcolor(lons, lats, tile_to_plot, vmin=-.25, vmax=.25, cmap='jet')
-            # plt.colorbar()
-            #-----------------------
-
-            # the lines commented back here work fine! (below)
-
-            # fig=plt.figure(figsize=(10, 8.5),dpi=90)
-            # plt. layout='latlon'
-            # ud_masked = uvel_dataset.UVEL.where(uvel_dataset.hFacW > 0, np.nan)
-
-            # ud_masked.isel(k=0,tile=10, time=month).plot(cmap='jet', vmin=-.26,vmax=.26)   #, vmin=-.1,vmax=.1)
-
-            # ecco_plt_tiles(ud_masked(layout='latlon', rotate_to_latlon=True)
-            # plt.title('ECCO v4r3 Velocity Chart by Anna Du');
-            # plt.title(' ');
-
-
-
-
-            alist = uvel_A.values[month,tile,0,int(yoge),int(xoge)] # Here the first threeo of these are correct
-            blist = vvel_A.values[month,tile,0,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
-
-            # HERE NEED TO CONVERT ABOVE INTO A DISTANCE TO ADD TO DOTCXOGE DOTYOGE
-            # 2592000 seconds in one month
-            # Now need to convert this into a real distance that can be plotted on a 90 x 90 grid
-            # one latitude line is 69 miles x 90 pts
-            # the earth is 40,075 km around at the equator aka circumference == aka linear distance of the 360 degree latitude in ECCO
-            # so divide this by 4 (4x90=360)
-            # so that is 40075 / 4 = 10,018.75 km (x 1000 m ) = 10,018,750 is the amt of meters in one 90 degree ECCO tile map
-            # so you need to divide this number by 90 and then you get how many meters are in each one of the 90 array pixels = 111,319.4444
-            # this number is the amount of meters in one pixel
-            # as an example lets multoply .086 times the amt of seconds in a month (2592000) = 222,912 = meters that this moves in ONE MONTH
-            # so it is reasonable to assume that we can move several pixels in one month so in a year we can move 20 pixels or more, maybe dozens
-            # LOGIC = you take the velocity of UVEL or VVEL (alist or blist) multiply it by 
-            #
-                    
- 
-            # alist = uvel_A.values[month,10,0,int(xoge),int(yoge)]   # old way of doing this
-            # blist = vvel_A.values[month,10,0,int(xoge),int(yoge)]
-
-            logging.debug(f'alist={alist}, blist={blist}')
-
-            dotxoge = float(xoge + alist*23.2843418683) #*fudgefactor)  THIS IS ADDING A VELOCITY TO A DISTNACE - NEED TO REDO THE THINGY ABOVE
-            dotyoge = float(yoge + blist*23.2843418683)
-
-            logging.debug(f'dotxoge={dotxoge}, dotyoge={dotyoge}')
-            
-            xoge = int(dotxoge) 
-            yoge = int(dotyoge)
-                
-            # if blist == 0.0:
-            #     blist = vvel_A.values[month,10,0,int(xoge),int(yoge)]
-
-            #if (yoge > 10):
-            #    plt.scatter(xoge,yoge,color='black')
-            # KEEEP THIS EXAMPLE BELOW
-            logging.debug(f"ecco_ds.hFacW.dims: {ecco_ds.hFacW.dims}")
+            logging.debug(f" ecco_ds.hFacW.dims: {ecco_ds.hFacW.dims}")
             
 
-            if abs(alist) == 0 and abs(blist) == 0:
+            if abs(uvel) == 0 and abs(vvel) == 0:
                     logging.debug("NOT MOVING")
-                    plt.scatter(dotxoge,dotyoge,color='black',marker='D',s=40)         
                                         
-            elif abs(dotyoge) <= 0:
-                    logging.debug("stuck on bottom")
-                    plt.scatter(dotxoge,dotyoge,color='yellow',marker='D',s=40)
-                    return monthly
-            elif abs(dotyoge) >= 90:
-                    logging.debug("stuck on top")
-                    plt.scatter(dotxoge,dotyoge,color='yellow',marker='D',s=40)
-                    return monthly
-
-            elif abs(dotxoge) <= 0:
-                    logging.debug("stuck on leftside")
-                    plt.scatter(dotxoge,dotyoge,color='yellow',marker='D',s=40)
-                    return monthly
-            elif abs(dotxoge) >= 90:
-                    logging.debug("stuck on rightside")
-                    plt.scatter(dotxoge,dotyoge,color='yellow',marker='D',s=40)
-                    return monthly
-
             else:
                 # THIS ONE IS NOW RIGHT# was backwards  [k,tile,j,i_g] (time, tile, k j i 
-                beachhfacw = ecco_ds.hFacW.values[0,tile,int(yoge),int(xoge)]
+                beachhfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
                 logging.debug(beachhfacw)
                 if (int(beachhfacw) != 0):
-                    plt.scatter(dotxoge,dotyoge,color='magenta')
+                    plt.scatter(xoge,yoge,color='magenta')
                     logging.debug("notbeached")
                 else:
                     logging.debug("beached!")
-                    plt.scatter(dotxoge,dotyoge,color='black',marker='D',s=40)
 
 
-            monthly.append([counter, particle, year, month, xoge, yoge])
+            monthly.append([tile, k, particle, year, month, xoge, yoge, uvel, vvel])
             # below need to have it open a new file automatically
             #newcsvfile =  'particles_out\\' + str("{:02d}".format(particle)) + 'eccodatasetoutput.csv'
             #f= open(newcsvfile,"rw")
@@ -182,6 +109,9 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10):
 
             #fig.savefig('C:\ECCOv4\output108\\' + str(counter) + '__' + str(year) +'_' + str("{:02d}".format(month+1)) + '_particle_' + str("{:02d}".format(particlecounter)) + '.png')
             #logging.debug(str(counter),str(particle),str(year),str("{:02d}".format(month+1)),str(xoge), str(yoge))
+            xoge, yoge = move_1month(xoge, yoge, uvel, vvel, fudge=False)
+            if outOfTile(xoge, yoge):
+                return monthly
     return monthly
                     
 # Above counter increments the particle count                
@@ -202,7 +132,7 @@ with open(input_file) as csv_file:
 
         # With recursive_load_ecco_var_from_years_nc one can specify one or more variables to load, one or more years to load, while also requesting only a subset of tiles and vertical levels.
       # ecco.recursive_load_ecco_var_from_years_nc(d
-        particle_result = particle_positions(particle, xoge, yoge, range(1999,2009))
+        particle_result = particle_positions(particle, xoge, yoge, range(1992,2015))
         results.extend(particle_result)
 
         particle += 1

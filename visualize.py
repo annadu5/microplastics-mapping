@@ -41,12 +41,16 @@ def configure_base_dir(base_dir=None):
     return eccodata_dir
 
 # base_dir of `eccodata`
-def load_ecco_ds(year, base_dir):
-    grid_dir = f'{base_dir}/Version4/Release3_alt/nctiles_grid'
-    ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
-    day_mean_dir = f'{base_dir}/Version4/Release3_alt/nctiles_monthly'
+def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
+    # ECCO_dir = base_dir + '/Version4/Release3_alt'
+    ECCO_dir = base_dir + '/Version4/Release4'
+    grid_dir = f'{ECCO_dir}/nctiles_grid'
+    # ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
+    ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCO-GRID.nc')
+    day_mean_dir = f'{ECCO_dir}/nctiles_monthly'
     ecco_vars = ecco.recursive_load_ecco_var_from_years_nc(
-        day_mean_dir, vars_to_load=['UVEL', 'VVEL'], years_to_load=year, dask_chunk=False)
+        day_mean_dir, vars_to_load=vars, years_to_load=year #, dask_chunk=False
+        )
     ecco_ds = xr.merge((ecco_grid , ecco_vars))
     return ecco_ds
 
@@ -59,15 +63,18 @@ def plot_vel(ecco_ds, tile, k, month):
     # because of the crossing of the international date line.
     lons[lons < 0] = lons[lons < 0]+360
     lats = ecco_ds.YC.sel(tile=tile)
-    tile_to_plot = ecco_ds.UVEL.isel(tile=tile, time=month)
-    tile_to_plot= tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=month) !=0, np.nan)
+    tile_to_plot = ecco_ds.UVEL.isel(tile=tile, time=month, k=0)
+    tile_to_plot= tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=0) !=0, np.nan)
     plt.pcolor(lons, lats, tile_to_plot, vmin=-.25, vmax=.25, cmap='jet')
+    # plt.pcolor(lons, lats, tile_to_plot)
+    # plt.imshow(tile_to_plot, origin='lower');
     plt.colorbar()
-    plt.savefig(f'{tile}.png')
+    # plt.savefig(f'{tile}.png')
+    plt.show()
 
 def main():
     base_dir = configure_base_dir()
-    ecco_ds = load_ecco_ds(1992, base_dir)
+    ecco_ds = load_ecco_ds(2005, base_dir)
     plot_vel(ecco_ds, 10, 0, 0)
 
 if __name__ == '__main__':

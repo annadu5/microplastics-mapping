@@ -1,25 +1,46 @@
 import numpy as np
 import xarray as xr
+import logging
 import sys
+import os
 import matplotlib.pyplot as plt
 import json
 import warnings
 warnings.filterwarnings('ignore')
-sys.path.append('/home/ec2-user/ECCOv4-py')
 from cartopy import config
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import ecco_v4_py as ecco
 import matplotlib.path as mpath
 import csv
 import random
-import logging
 import argparse
+
+sys.path.append(f'{os.path.expanduser("~")}/ECCOv4-py')
+try:
+    import ecco_v4_py as ecco
+except Exception as e:
+    print('Please add ECCOv4-py to System Environment PYTHONPATH!', file=sys.stderr)
+    raise(e)
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-# base_dir = '/eccodata'
+def configure_base_dir(base_dir=None):
+    eccodata_dir = ''
+    if base_dir and os.path.isdir(base_dir):
+        eccodata_dir = base_dir
+    elif 'ECCODATA_DIR' in os.environ and os.path.isdir(os.path.expanduser(os.environ['ECCODATA_DIR'])):
+        eccodata_dir = os.path.expanduser(os.environ['ECCODATA_DIR'])
+    elif os.path.isdir(os.path.expanduser('~/eccodata')):
+        eccodata_dir = os.path.expanduser('~/eccodata')
+    elif os.path.isdir('/eccodata'):
+        eccodata_dir = '/eccodata'
+    else:
+        raise Exception('Cannot find eccodata directory')
+    logging.info(f'Setting eccodata to {eccodata_dir}')
+    return eccodata_dir
+
+# base_dir of `eccodata`
 def load_ecco_ds(year, base_dir):
     grid_dir = f'{base_dir}/Version4/Release3_alt/nctiles_grid'
     ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
@@ -45,7 +66,8 @@ def plot_vel(ecco_ds, tile, k, month):
     plt.savefig(f'{tile}.png')
 
 def main():
-    ecco_ds = load_ecco_ds(1992, '/eccodata')
+    base_dir = configure_base_dir()
+    ecco_ds = load_ecco_ds(1992, base_dir)
     plot_vel(ecco_ds, 10, 0, 0)
 
 if __name__ == '__main__':

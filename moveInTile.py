@@ -18,17 +18,24 @@ import argparse
 
 logging.basicConfig(level=logging.DEBUG)
 
-base_dir = '/eccodata'
-grid_dir = f'{base_dir}/Version4/Release3_alt/nctiles_grid'
+eccodata_dir = '/eccodata'
+grid_dir = f'{eccodata_dir}/Version4/Release3_alt/nctiles_grid'
 ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
-day_mean_dir = f'{base_dir}/Version4/Release3_alt/nctiles_monthly'
+day_mean_dir = f'{eccodata_dir}/Version4/Release3_alt/nctiles_monthly'
+
+
+# TODO
+def load_ecco_ds():
+    pass
 
 
 def usage():
     parser = argparse.ArgumentParser(description='Compute particle movements within one tile')
     parser.add_argument('inputfile')
+    # TODO k_base1, month_base1
     parser.add_argument('-k', '--k', type=int, default=0, help='k layer')
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
+    # TODO add --from-year --to-year
     args = parser.parse_args()
     return args
 
@@ -75,6 +82,7 @@ def move_1month(x0, y0, uvel, vvel, fudge=False, retry=0):
 
     for run in range(retry):
         logging.debug(f'{x+dx}, {y+dy}')
+        # TODO beached
         if not outOfTile(x+dy, y+dy) or not fudge:
             break
         logging.debug(f"    retry {run+1}")
@@ -85,7 +93,7 @@ def move_1month(x0, y0, uvel, vvel, fudge=False, retry=0):
 
 counter = 0
 def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
-    monthly = [['tile', 'k', 'particle', 'year', 'month', 'xoge', 'yoge', 'uvel', 'vvel']]
+    monthly = []
     xoge = xoge0
     yoge = yoge0
     global counter
@@ -134,9 +142,7 @@ input_file = args.inputfile
 k = args.k
 tile = args.tile
 
-results = []
-#input_file = 'klawinput.csv'
-#input_file = 'testing.csv'
+results = [['tile', 'k', 'particle', 'year', 'month', 'xoge', 'yoge', 'uvel', 'vvel']]
 with open(input_file) as csv_file:
     csv_reader = csv.DictReader(csv_file, delimiter=',')
     particle = 0
@@ -152,7 +158,9 @@ with open(input_file) as csv_file:
 
         particle += 1
 
-with open('particles_out/' + 'eccodataset_output.csv', mode='w+', newline='') as out_file:
+# TODO change output path
+output_path = 'particles_out/eccodataset_output.csv'
+with open(output_path, mode='w+', newline='') as out_file:
     out_writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     for result in results:
         out_writer.writerow(result)

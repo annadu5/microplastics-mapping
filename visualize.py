@@ -12,6 +12,7 @@ from cartopy import config
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.path as mpath
+import math
 import csv
 import random
 import argparse
@@ -57,19 +58,24 @@ def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
     return ecco_ds
 
 
+def hypot(uvel_ds, vvel_ds):
+    # uvel_ds and vvel_ds have different coordinates
+    # >>> list(uvel_ds.coords)
+    # ['i_g', 'k', 'j', 'tile', 'Z', 'dxC', 'rAw', 'dyG', 'PHrefC', 'drF', 'hFacW', 'maskW', 'timestep', 'time']
+    # >>> list(vvel_ds.coords)
+    # ['j_g', 'k', 'i', 'tile', 'Z', 'rAs', 'dxG', 'dyC', 'PHrefC', 'drF', 'hFacS', 'maskS', 'timestep', 'time']
+    # vel_ds = np.hypot(uvel_ds, vvel_ds)
+    vel_ds = uvel_ds
+    return vel_ds
+
+
 def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
     fig = plt.figure(figsize=(9,9))
-    lons = np.copy(ecco_ds.XC.sel(tile=tile))
-    # we must convert the longitude coordinates from
-    # [-180 to 180] to [0 to 360]
-    # because of the crossing of the international date line.
-    lons[lons < 0] = lons[lons < 0]+360
-    lats = ecco_ds.YC.sel(tile=tile)
-    tile_to_plot = ecco_ds.UVEL.isel(tile=tile, time=month, k=0)
-    tile_to_plot= tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=0) !=0, np.nan)
-    plt.pcolor(lons, lats, tile_to_plot, vmin=-.25, vmax=.25, cmap='jet')
-    # plt.pcolor(lons, lats, tile_to_plot)
-    # plt.imshow(tile_to_plot, origin='lower');
+    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=0)
+    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=0)
+    tile_to_plot = hypot(uvel_ds, vvel_ds)
+    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=0) !=0, np.nan)
+    plt.imshow(tile_to_plot, origin='lower');
     plt.colorbar()
     results_month = results[(results.year == year) & (results.month == month)]
     print(type(results_month))

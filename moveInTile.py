@@ -19,9 +19,9 @@ import argparse
 logging.basicConfig(level=logging.DEBUG)
 
 eccodata_dir = '/eccodata'
-grid_dir = f'{eccodata_dir}/Version4/Release3_alt/nctiles_grid'
-ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
-day_mean_dir = f'{eccodata_dir}/Version4/Release3_alt/nctiles_monthly'
+grid_dir = f'{eccodata_dir}/Version4/Release4/nctiles_grid'
+ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCO-GRID.nc')
+day_mean_dir = f'{eccodata_dir}/Version4/Release4/nctiles_monthly'
 
 
 # TODO
@@ -58,7 +58,9 @@ def notMoving(uvel, vvel):
     return uvel == 0 and vvel == 0
 
 
-def beached(hfacw):
+def beached(ecco_ds, xoge, yoge, tile, k):
+    hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
+    logging.debug(hfacw)
     return int(hfacw) == 0
 
 
@@ -69,7 +71,7 @@ def disturb(x, y):
 # Move the particle 1 month by its position and vel
 # If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(x0, y0, uvel, vvel, fudge=False, retry=0):
+def move_1month(ecco_ds, x0, y0, uvel, vvel, fudge=False, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
@@ -83,7 +85,7 @@ def move_1month(x0, y0, uvel, vvel, fudge=False, retry=0):
     for run in range(retry):
         logging.debug(f'{x+dx}, {y+dy}')
         # TODO beached
-        if not outOfTile(x+dy, y+dy) or not fudge:
+        if not outOfTile(x+dy, y+dy):
             break
         logging.debug(f"    retry {run+1}")
         dx, dy = disturb(x, y)
@@ -120,15 +122,13 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
             if notMoving(uvel, vvel):
                 logging.debug("    NOT MOVING")
 
-            hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
-            logging.debug(hfacw)
-            if beached(hfacw):
+            if beached(ecco_ds, xoge, yoge, tile, k):
                 logging.debug("    beached!")
 
 
             monthly.append([tile, k, particle, year, month, xoge, yoge, uvel, vvel])
 
-            xoge, yoge = move_1month(xoge, yoge, uvel, vvel, fudge=True, retry=4)
+            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, fudge=False, retry=4)
             if outOfTile(xoge, yoge):
                 logging.debug("    particle will be out of tile")
                 return monthly

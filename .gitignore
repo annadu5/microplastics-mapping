@@ -2,3 +2,5 @@ particles_out/
 results_*.csv
 results/
 __pycache__/
+*.png
+*.mp4

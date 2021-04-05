@@ -59,7 +59,8 @@ def usage():
     # TODO k_base1, month_base1
     parser.add_argument('-k', '--k', type=int, default=0, help='k layer')
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
-    # TODO add --from-year --to-year
+    parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
+    parser.add_argument('--to-year', type=int, default=2015, help='Eng year')
     args = parser.parse_args()
     return args
 
@@ -140,19 +141,28 @@ def write_results(input_file, results):
         out_writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for result in results:
             out_writer.writerow(result)
+    logging.info(f' Results are written to {output_path}')
+
+
+def get_vel(ecco_ds, k, month, tile, xi, yj):
+    # uvel = ecco_ds.UVEL.values[month,k, tile,int(yoge),int(xoge)]
+    # vvel = ecco_ds.VVEL.values[month,k, tile,int(yoge),int(xoge)]
+    uvel = float(ecco_ds.UVEL.isel(time=month, k=k, j=int(yj), i_g=int(xi), tile=tile).values)
+    vvel = float(ecco_ds.VVEL.isel(time=month, k=k, j_g=int(yj), i=int(xi), tile=tile).values)
+    return uvel, vvel
 
 
 def particle_position(ecco_ds, particle, tile, k, year, month, results):
     if particle['state'] == 'OutOfTile':
         return False
-    xoge = particle['xoge']
-    yoge = particle['yoge']
-    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge})")
+    xoge = float(particle['xoge'])
+    yoge = float(particle['yoge'])
 
-    uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)]
-    vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)]
+    uvel, vvel = get_vel(ecco_ds, k, month, tile, xoge, yoge)
+
+    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel})")
+
     if notMoving(uvel, vvel):
-        particle['state'] = 'NotMoving'
         logging.debug("    Not Moving")
 
     if beached(ecco_ds, xoge, yoge, tile, k):
@@ -161,7 +171,7 @@ def particle_position(ecco_ds, particle, tile, k, year, month, results):
 
     results.append([tile, k, particle['index'], year, month, xoge, yoge, uvel, vvel])
 
-    xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=True, retry=4)
+    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=False, retry=4)
     if outOfTile(xoge, yoge):
         particle['state'] = 'OutOfTile'
         logging.debug("    particle will be out of tile")
@@ -176,7 +186,7 @@ def main():
 
     results = [['tile', 'k', 'particle', 'year', 'month', 'xoge', 'yoge', 'uvel', 'vvel']]
     base_dir = configure_base_dir()
-    for year in range(1992,2015):
+    for year in range(args.from_year, args.to_year):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:

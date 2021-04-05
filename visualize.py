@@ -28,6 +28,13 @@ except Exception as e:
 logging.basicConfig(level=logging.DEBUG)
 
 
+def usage():
+    parser = argparse.ArgumentParser(description='generate video')
+    parser.add_argument('resultfile', default='results_klawinput.csv')
+    args = parser.parse_args()
+    return args
+
+
 def configure_base_dir(base_dir=None):
     eccodata_dir = ''
     if base_dir and os.path.isdir(base_dir):
@@ -99,18 +106,22 @@ def gen_mp4(file_pattern):
     rotate_file(file_pattern)
     cmd = f'ffmpeg -r 30 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
+    run(f'rm {file_pattern}_*.png', shell=True)
+    logging.info(f' Generated {file_pattern}.mp4')
 
 
 def main():
+    args = usage()
     base_dir = configure_base_dir()
     # ecco_ds = load_ecco_ds(2005, base_dir)
     # plot_vel(ecco_ds, 10, 0, 0)
-    particles_results_file = 'results_klawinput.csv'
+    particles_results_file = args.resultfile
     results = pd.read_csv(particles_results_file)
     count = 0
     tile = 10
     k = 0
-    file_pattern = f'results_{tile}_{k}'
+    fname, fext = os.path.splitext(particles_results_file)
+    file_pattern = f'{os.path.basename(fname)}_{tile}_{k}'
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):

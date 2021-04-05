@@ -119,44 +119,16 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
     return (x+dx, y+dy)
 
 
-def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
-    monthly = []
-    xoge = xoge0
-    yoge = yoge0
-    base_dir = configure_base_dir()
-    for year in year_range:  # good stretch is 1999 to 2009  BELOW UNDER K and TILES NEED TO MAKE VARS
-        ecco_ds = load_ecco_ds(int(year), base_dir)
-
-        for month in range (12):   # 12 vs 11
-            
-            logging.info(f" tile {tile} k {k} PARTICLE {particle} {year}/{month} @ ({xoge},{yoge})")
-
-            uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
-            vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
-
-            if notMoving(uvel, vvel):
-                logging.debug("    NOT MOVING")
-
-            if beached(ecco_ds, xoge, yoge, tile, k):
-                logging.debug("    beached!")
-
-
-            monthly.append([tile, k, particle, year, month, xoge, yoge, uvel, vvel])
-
-            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=True, retry=4)
-            if outOfTile(xoge, yoge):
-                logging.debug("    particle will be out of tile")
-                return monthly
-    return monthly
-
-
 def read_input(input_file):
     with open(input_file) as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=',')
-        rows = []
+        particles = []
+        index = 0
         for row in csv_reader:
-            rows.append(row)
-    return rows
+            particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
+            particles.append(particle)
+            index += 1
+    return particles
 
 
 def write_results(input_file, results):
@@ -170,26 +142,47 @@ def write_results(input_file, results):
             out_writer.writerow(result)
 
 
+def particle_position(ecco_ds, particle, tile, k, year, month, results):
+    if particle['state'] == 'OutOfTile':
+        return False
+    xoge = particle['xoge']
+    yoge = particle['yoge']
+    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge})")
+
+    uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)]
+    vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)]
+    if notMoving(uvel, vvel):
+        particle['state'] = 'NotMoving'
+        logging.debug("    Not Moving")
+
+    if beached(ecco_ds, xoge, yoge, tile, k):
+        particle['state'] = 'Beached'
+        logging.debug("    beached!")
+
+    results.append([tile, k, particle['index'], year, month, xoge, yoge, uvel, vvel])
+
+    xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=True, retry=4)
+    if outOfTile(xoge, yoge):
+        particle['state'] = 'OutOfTile'
+        logging.debug("    particle will be out of tile")
+    return True
+
 def main():
     args = usage()
+    tile = args.tile
+    k = args.k
     input_file = args.inputfile
-    inputs = read_input(input_file)
+    particles = read_input(input_file)
 
     results = [['tile', 'k', 'particle', 'year', 'month', 'xoge', 'yoge', 'uvel', 'vvel']]
-    particle = 0
-    for row in inputs:
-        xoge = int(row['xoge'])
-        yoge = int(row['yoge'])
-
-        # With recursive_load_ecco_var_from_years_nc one can specify one or more variables to load, one or more years to load, while also requesting only a subset of tiles and vertical levels.
-        particle_result = particle_positions(particle, xoge, yoge, range(1992,2015), tile=args.tile, k=args.k)
-        results.extend(particle_result)
-
-        particle += 1
-
-
-
+    base_dir = configure_base_dir()
+    for year in range(1992,2015):
+        ecco_ds = load_ecco_ds(int(year), base_dir)
+        for month in range(12):
+            for particle in particles:
+                particle_position(ecco_ds, particle, tile, k, year, month, results)
     write_results(input_file, results)
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

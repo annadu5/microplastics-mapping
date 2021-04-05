@@ -75,18 +75,29 @@ def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
     vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=0)
     tile_to_plot = hypot(uvel_ds, vvel_ds)
     tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=0) !=0, np.nan)
-    plt.imshow(tile_to_plot, origin='lower');
+    plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
     plt.colorbar()
+    plt.title(f'{year}-{month+1}')
     results_month = results[(results.year == year) & (results.month == month)]
-    print(type(results_month))
     for index, result in results_month.iterrows():
         plt.scatter(result.xoge, result.yoge, color='black')
     plt.savefig(outfile)
     # plt.show()
 
 
+def rotate_file(file_pattern):
+    file_to_save = file_pattern+'.mp4'
+    if os.path.isfile(file_to_save):
+        for i in range(100):
+            file_backup = f'{file_pattern}_{i}.mp4'
+            if not os.path.exists(file_backup):
+                os.rename(file_to_save, file_backup)
+                break
+
+
 def gen_mp4(file_pattern):
-    cmd = f'ffmpeg -r 30 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {file_pattern}.mp4'
+    rotate_file(file_pattern)
+    cmd = f'ffmpeg -r 30 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
 
 

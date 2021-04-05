@@ -70,11 +70,11 @@ def outOfTile(x,y):
     if y < 0:
         # anything else?
         return True
-    elif y > 90:
+    elif y >= 90:
         return True
     elif x < 0:
         return True
-    elif x > 90:
+    elif x >= 90:
         return True
     else:
         return False
@@ -86,7 +86,6 @@ def notMoving(uvel, vvel):
 
 def beached(ecco_ds, xoge, yoge, tile, k):
     hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
-    logging.debug(hfacw)
     return int(hfacw) == 0
 
 
@@ -102,15 +101,17 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
 
+    dx = dy = 0
     if fudge:
         # Fudge around half a pixel
         dx, dy = disturb(x, y)
-    else:
-        dx = dy = 0
 
     for run in range(retry):
-        if outOfTile(x+dy, y+dy) or beached(ecco_ds, x+dx, y+dy, tile, k):
-            logging.debug(f"    r{x+dx}, {y+dy}, etry {run+1}")
+        if outOfTile(x+dx, y+dy):
+            logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
+            dx, dy = disturb(x, y)
+        elif beached(ecco_ds, x+dx, y+dy, tile, k):
+            logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
             dx, dy = disturb(x, y)
         else:
             break
@@ -135,8 +136,6 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
 
             uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
             vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
-
-            logging.debug(f"    (uvel,vvel)=({uvel},{vvel})    ecco_ds.hFacW.dims: {ecco_ds.hFacW.dims}")
 
             if notMoving(uvel, vvel):
                 logging.debug("    NOT MOVING")

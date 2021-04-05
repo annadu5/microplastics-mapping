@@ -31,7 +31,7 @@ logging.basicConfig(level=logging.INFO)
 def usage():
     parser = argparse.ArgumentParser(description='generate video')
     parser.add_argument('resultfile', default='results_klawinput.csv')
-    parser.add_argument('debug', action='store_true', help='Debug Mode')
+    parser.add_argument('--debug', action='store_true', help='Debug Mode')
     args = parser.parse_args()
     return args
 

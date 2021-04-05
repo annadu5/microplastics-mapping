@@ -89,8 +89,10 @@ def beached(ecco_ds, xoge, yoge, tile, k):
     return int(hfacw) == 0
 
 
-def disturb(x, y):
-    return (random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5))
+def disturb(uvel, vvel):
+    dx = random.uniform(-0.5, 0.5) if uvel else 0
+    dy = random.uniform(-0.5, 0.5) if vvel else 0
+    return dx, dy
 
 
 # Move the particle 1 month by its position and vel
@@ -104,15 +106,15 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
     dx = dy = 0
     if fudge:
         # Fudge around half a pixel
-        dx, dy = disturb(x, y)
+        dx, dy = disturb(uvel, vvel)
 
     for run in range(retry):
         if outOfTile(x+dx, y+dy):
             logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
-            dx, dy = disturb(x, y)
+            dx, dy = disturb(uvel, vvel)
         elif beached(ecco_ds, x+dx, y+dy, tile, k):
             logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
-            dx, dy = disturb(x, y)
+            dx, dy = disturb(uvel, vvel)
         else:
             break
 

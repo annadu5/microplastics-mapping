@@ -122,7 +122,7 @@ def main(args):
     results = pd.read_csv(particles_results_file)
     count = 0
     tile = 10
-    k = 0
+    k = args.k
     fname, fext = os.path.splitext(particles_results_file)
     file_pattern = f'{fname}-{k}'
     for year in np.sort(results.year.unique()):

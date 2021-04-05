@@ -86,8 +86,13 @@ def notMoving(uvel, vvel):
     return uvel == 0 and vvel == 0
 
 
+def get_hfacw(ecco_ds, k, tile, xi, yj):
+    # hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
+    hfacw = float(ecco_ds.hFacW.isel(k=k, tile=tile, i_g=xi, j=yj).values)
+    return hfacw
+
 def beached(ecco_ds, xoge, yoge, tile, k):
-    hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
+    hfacw = get_hfacw(ecco_ds, k, tile, xoge, yoge)
     return int(hfacw) == 0
 
 

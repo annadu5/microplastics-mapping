@@ -25,12 +25,13 @@ except Exception as e:
     print('Please add ECCOv4-py to System Environment PYTHONPATH!', file=sys.stderr)
     raise(e)
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def usage():
     parser = argparse.ArgumentParser(description='generate video')
     parser.add_argument('resultfile', default='results_klawinput.csv')
+    parser.add_argument('debug', action='store_true', help='Debug Mode')
     args = parser.parse_args()
     return args
 
@@ -87,6 +88,7 @@ def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
     plt.title(f'{year}-{month+1}')
     results_month = results[(results.year == year) & (results.month == month)]
     for index, result in results_month.iterrows():
+        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
         plt.scatter(result.xoge, result.yoge, color='black')
     plt.savefig(outfile)
     # plt.show()
@@ -102,16 +104,16 @@ def rotate_file(file_pattern):
                 break
 
 
-def gen_mp4(file_pattern):
+def gen_mp4(file_pattern, keep_png=False):
     rotate_file(file_pattern)
-    cmd = f'ffmpeg -r 30 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
+    cmd = f'ffmpeg -r 24 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
-    run(f'rm {file_pattern}_*.png', shell=True)
+    if not keep_png:
+        run(f'rm {file_pattern}_*.png', shell=True)
     logging.info(f' Generated {file_pattern}.mp4')
 
 
-def main():
-    args = usage()
+def main(args):
     base_dir = configure_base_dir()
     # ecco_ds = load_ecco_ds(2005, base_dir)
     # plot_vel(ecco_ds, 10, 0, 0)
@@ -129,7 +131,9 @@ def main():
             plot_vel(ecco_ds, tile, k, year, month, results, outfile)
             count += 1
     
-    gen_mp4(file_pattern)
+    gen_mp4(file_pattern, keep_png=args.debug)
+
 
 if __name__ == '__main__':
-    main()
+    args = usage()
+    main(args)

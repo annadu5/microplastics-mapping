@@ -135,8 +135,8 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
             
             logging.debug(f" tile {tile} k {k} PARTICLE {particle} {year}/{month} @ ({xoge},{yoge})")
 
-            uvel = ecco_ds.UVEL.values[month,k, tile,int(yoge),int(xoge)] # Here the first threeo of these are correct
-            vvel = ecco_ds.VVEL.values[month,k, tile,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
+            uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
+            vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
 
             logging.debug(f"    (uvel,vvel)=({uvel},{vvel})    ecco_ds.hFacW.dims: {ecco_ds.hFacW.dims}")
 
@@ -149,7 +149,7 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
 
             monthly.append([tile, k, particle, year, month, xoge, yoge, uvel, vvel])
 
-            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=False, retry=4)
+            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=True, retry=4)
             if outOfTile(xoge, yoge):
                 logging.debug("    particle will be out of tile")
                 return monthly
@@ -180,8 +180,8 @@ with open(input_file) as csv_file:
 
 # output path is adds results_ to input file
 output_path = 'results_' + os.path.basename(input_file)
-if os.path.basename(input_file):
-    output_path = os.path.basename(input_file) + output_path
+if os.path.dirname(input_file):
+    output_path = os.path.dirname(input_file) + output_path
 with open(output_path, mode='w+', newline='') as out_file:
     out_writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     for result in results:

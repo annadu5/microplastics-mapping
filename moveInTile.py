@@ -1,6 +1,7 @@
 import numpy as np
 import xarray as xr
 import sys
+import os
 import matplotlib.pyplot as plt
 import json
 import warnings
@@ -18,15 +19,34 @@ import argparse
 
 logging.basicConfig(level=logging.DEBUG)
 
-eccodata_dir = '/eccodata'
-grid_dir = f'{eccodata_dir}/Version4/Release4/nctiles_grid'
-ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCO-GRID.nc')
-day_mean_dir = f'{eccodata_dir}/Version4/Release4/nctiles_monthly'
+def configure_base_dir(base_dir=None):
+    eccodata_dir = ''
+    if base_dir and os.path.isdir(base_dir):
+        eccodata_dir = base_dir
+    elif 'ECCODATA_DIR' in os.environ and os.path.isdir(os.path.expanduser(os.environ['ECCODATA_DIR'])):
+        eccodata_dir = os.path.expanduser(os.environ['ECCODATA_DIR'])
+    elif os.path.isdir(os.path.expanduser('~/eccodata')):
+        eccodata_dir = os.path.expanduser('~/eccodata')
+    elif os.path.isdir('/eccodata'):
+        eccodata_dir = '/eccodata'
+    else:
+        raise Exception('Cannot find eccodata directory')
+    logging.info(f'Setting eccodata to {eccodata_dir}')
+    return eccodata_dir
 
 
-# TODO
-def load_ecco_ds():
-    pass
+def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
+    # ECCO_dir = base_dir + '/Version4/Release3_alt'
+    ECCO_dir = base_dir + '/Version4/Release4'
+    grid_dir = f'{ECCO_dir}/nctiles_grid'
+    # ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
+    ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCO-GRID.nc')
+    day_mean_dir = f'{ECCO_dir}/nctiles_monthly'
+    ecco_vars = ecco.recursive_load_ecco_var_from_years_nc(
+        day_mean_dir, vars_to_load=vars, years_to_load=year , dask_chunk=False
+        )
+    ecco_ds = xr.merge((ecco_grid , ecco_vars))
+    return ecco_ds
 
 
 def usage():
@@ -71,7 +91,7 @@ def disturb(x, y):
 # Move the particle 1 month by its position and vel
 # If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, x0, y0, uvel, vvel, fudge=False, retry=0):
+def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
@@ -85,7 +105,8 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, fudge=False, retry=0):
     for run in range(retry):
         logging.debug(f'{x+dx}, {y+dy}')
         # TODO beached
-        if not outOfTile(x+dy, y+dy):
+        if (not outOfTile(x+dy, y+dy)) and \
+            (not beached(ecco_ds, x+dx, y+dy, tile, k)) :
             break
         logging.debug(f"    retry {run+1}")
         dx, dy = disturb(x, y)
@@ -99,20 +120,14 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
     xoge = xoge0
     yoge = yoge0
     global counter
+    base_dir = configure_base_dir()
     for year in year_range:  # good stretch is 1999 to 2009  BELOW UNDER K and TILES NEED TO MAKE VARS
-        ecco_vars = ecco.recursive_load_ecco_var_from_years_nc(
-                day_mean_dir, vars_to_load=['UVEL', 'VVEL'], years_to_load=year, dask_chunk=False)
-                #k_subset = [0], \
-                #tiles_to_load = [10], \
+        ecco_ds = load_ecco_ds(int(year), base_dir)
 
         for month in range (12):   # 12 vs 11
             counter += 1
             
             logging.debug(f" tile {tile} k {k} PARTICLE {particle} {year}/{month} @ ({xoge},{yoge})")
-
-            
-            ecco_ds = xr.merge((ecco_grid , ecco_vars))
-            ecco_ds.attrs = []
 
             uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
             vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
@@ -128,7 +143,7 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
 
             monthly.append([tile, k, particle, year, month, xoge, yoge, uvel, vvel])
 
-            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, fudge=False, retry=4)
+            xoge, yoge = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=False, retry=4)
             if outOfTile(xoge, yoge):
                 logging.debug("    particle will be out of tile")
                 return monthly
@@ -147,7 +162,6 @@ with open(input_file) as csv_file:
     csv_reader = csv.DictReader(csv_file, delimiter=',')
     particle = 0
     for row in csv_reader:
-        #logging.debug(particle)
         xoge = int(row['xoge'])
         yoge = int(row['yoge'])
 
@@ -158,8 +172,10 @@ with open(input_file) as csv_file:
 
         particle += 1
 
-# TODO change output path
-output_path = 'particles_out/eccodataset_output.csv'
+# output path is adds results_ to input file
+output_path = 'results_' + os.path.basename(input_file)
+if os.path.basename(input_file):
+    output_path = os.path.basename(input_file) + output_path
 with open(output_path, mode='w+', newline='') as out_file:
     out_writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     for result in results:

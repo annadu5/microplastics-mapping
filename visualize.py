@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import pandas as pd
 import logging
 import sys
 import os
@@ -14,6 +15,7 @@ import matplotlib.path as mpath
 import csv
 import random
 import argparse
+from subprocess import run
 
 sys.path.append(f'{os.path.expanduser("~")}/ECCOv4-py')
 try:
@@ -55,7 +57,7 @@ def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
     return ecco_ds
 
 
-def plot_vel(ecco_ds, tile, k, month):
+def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
     fig = plt.figure(figsize=(9,9))
     lons = np.copy(ecco_ds.XC.sel(tile=tile))
     # we must convert the longitude coordinates from
@@ -69,13 +71,37 @@ def plot_vel(ecco_ds, tile, k, month):
     # plt.pcolor(lons, lats, tile_to_plot)
     # plt.imshow(tile_to_plot, origin='lower');
     plt.colorbar()
-    # plt.savefig(f'{tile}.png')
-    plt.show()
+    results_month = results[(results.year == year) & (results.month == month)]
+    print(type(results_month))
+    for index, result in results_month.iterrows():
+        plt.scatter(result.xoge, result.yoge, color='black')
+    plt.savefig(outfile)
+    # plt.show()
+
+
+def gen_mp4(file_pattern):
+    cmd = f'ffmpeg -r 30 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {file_pattern}.mp4'
+    run(cmd, shell=True)
+
 
 def main():
     base_dir = configure_base_dir()
-    ecco_ds = load_ecco_ds(2005, base_dir)
-    plot_vel(ecco_ds, 10, 0, 0)
+    # ecco_ds = load_ecco_ds(2005, base_dir)
+    # plot_vel(ecco_ds, 10, 0, 0)
+    particles_results_file = 'results_klawinput.csv'
+    results = pd.read_csv(particles_results_file)
+    count = 0
+    tile = 10
+    k = 0
+    file_pattern = f'results_{tile}_{k}'
+    for year in np.sort(results.year.unique()):
+        ecco_ds = load_ecco_ds(int(year), base_dir)
+        for month in range(12):
+            outfile = f'{file_pattern}_{count:03}.png'
+            plot_vel(ecco_ds, tile, k, year, month, results, outfile)
+            count += 1
+    
+    gen_mp4(file_pattern)
 
 if __name__ == '__main__':
     main()

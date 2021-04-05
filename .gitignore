@@ -1,3 +1,4 @@
 particles_out/
 results_*.csv
 results/
+__pycache__/

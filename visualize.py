@@ -31,6 +31,7 @@ logging.basicConfig(level=logging.INFO)
 def usage():
     parser = argparse.ArgumentParser(description='generate video')
     parser.add_argument('resultfile', default='results_klawinput.csv')
+    parser.add_argument('-k','--k', default=0, type=int, help='K Layer')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     args = parser.parse_args()
     return args
@@ -123,7 +124,7 @@ def main(args):
     tile = 10
     k = 0
     fname, fext = os.path.splitext(particles_results_file)
-    file_pattern = fname
+    file_pattern = f'{fname}-{k}'
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):

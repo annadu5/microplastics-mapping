@@ -6,16 +6,22 @@ import matplotlib.pyplot as plt
 import json
 import warnings
 warnings.filterwarnings('ignore')
-sys.path.append('/home/ec2-user/ECCOv4-py')
 from cartopy import config
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import ecco_v4_py as ecco
 import matplotlib.path as mpath
 import csv
 import random
 import logging
 import argparse
+
+sys.path.append(f'{os.path.expanduser("~")}/ECCOv4-py')
+try:
+    import ecco_v4_py as ecco
+except Exception as e:
+    print('Please add ECCOv4-py to System Environment PYTHONPATH!', file=sys.stderr)
+    raise(e)
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -129,8 +135,8 @@ def particle_positions(particle, xoge0, yoge0, year_range, tile=10, k=0):
             
             logging.debug(f" tile {tile} k {k} PARTICLE {particle} {year}/{month} @ ({xoge},{yoge})")
 
-            uvel = ecco_ds.UVEL.values[month,tile,k,int(yoge),int(xoge)] # Here the first threeo of these are correct
-            vvel = ecco_ds.VVEL.values[month,tile,k,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
+            uvel = ecco_ds.UVEL.values[month,k, tile,int(yoge),int(xoge)] # Here the first threeo of these are correct
+            vvel = ecco_ds.VVEL.values[month,k, tile,int(yoge),int(xoge)] # m/s needs to be converted into a distance -- this is a VELOCITY
 
             logging.debug(f"    (uvel,vvel)=({uvel},{vvel})    ecco_ds.hFacW.dims: {ecco_ds.hFacW.dims}")
 

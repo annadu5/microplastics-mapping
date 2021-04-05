@@ -109,13 +109,11 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
         dx = dy = 0
 
     for run in range(retry):
-        logging.debug(f'{x+dx}, {y+dy}')
-        # TODO beached
-        if (not outOfTile(x+dy, y+dy)) and \
-            (not beached(ecco_ds, x+dx, y+dy, tile, k)) :
+        if outOfTile(x+dy, y+dy) or beached(ecco_ds, x+dx, y+dy, tile, k):
+            logging.debug(f"    r{x+dx}, {y+dy}, etry {run+1}")
+            dx, dy = disturb(x, y)
+        else:
             break
-        logging.debug(f"    retry {run+1}")
-        dx, dy = disturb(x, y)
 
     return (x+dx, y+dy)
 

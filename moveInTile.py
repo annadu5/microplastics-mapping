@@ -43,6 +43,7 @@ def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
     # ECCO_dir = base_dir + '/Version4/Release3_alt'
     ECCO_dir = base_dir + '/Version4/Release4'
     grid_dir = f'{ECCO_dir}/nctiles_grid'
+    logging.info(f'Loading {year} {vars}')
     # ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCOv4r3_grid.nc')
     ecco_grid = ecco.load_ecco_grid_nc(grid_dir, 'ECCO-GRID.nc')
     day_mean_dir = f'{ECCO_dir}/nctiles_monthly'
@@ -60,7 +61,9 @@ def usage():
     parser.add_argument('-k', '--k', type=int, default=0, help='k layer')
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
-    parser.add_argument('--to-year', type=int, default=2015, help='Eng year')
+    parser.add_argument('--to-year', type=int, default=2015, help='End year')
+    parser.add_argument('--disturbing', action='store_true', help='Add turbulence to particle movement')
+    parser.add_argument('--debug', action='store_true', help='Debug Mode')
     args = parser.parse_args()
     return args
 
@@ -95,15 +98,15 @@ def disturb(uvel, vvel):
 
 
 # Move the particle 1 month by its position and vel
-# If fudge is set, then add a disturb within (-0.5, 0.5)
+# If disturbing is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
+def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, disturbing=False, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
 
     dx = dy = 0
-    if fudge:
+    if disturbing:
         # Fudge around half a pixel
         dx, dy = disturb(uvel, vvel)
 
@@ -152,7 +155,7 @@ def get_vel(ecco_ds, k, month, tile, xi, yj):
     return uvel, vvel
 
 
-def particle_position(ecco_ds, particle, tile, k, year, month, results):
+def particle_position(ecco_ds, particle, tile, k, year, month, results, disturbing=False):
     if particle['state'] == 'OutOfTile':
         return False
     xoge = float(particle['xoge'])
@@ -171,14 +174,13 @@ def particle_position(ecco_ds, particle, tile, k, year, month, results):
 
     results.append([tile, k, particle['index'], year, month, xoge, yoge, uvel, vvel])
 
-    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=False, retry=4)
+    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, disturbing=disturbing, retry=4)
     if outOfTile(xoge, yoge):
         particle['state'] = 'OutOfTile'
         logging.debug("    particle will be out of tile")
     return True
 
-def main():
-    args = usage()
+def main(args):
     tile = args.tile
     k = args.k
     input_file = args.inputfile
@@ -190,10 +192,14 @@ def main():
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:
-                particle_position(ecco_ds, particle, tile, k, year, month, results)
+                particle_position(ecco_ds, particle, tile, k, year, month, results, disturbing=args.disturbing)
     write_results(input_file, results)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    main()
+    args = usage()
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    main(args)

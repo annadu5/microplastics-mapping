@@ -121,7 +121,7 @@ def main():
     tile = 10
     k = 0
     fname, fext = os.path.splitext(particles_results_file)
-    file_pattern = f'{os.path.basename(fname)}_{tile}_{k}'
+    file_pattern = fname
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):

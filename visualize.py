@@ -82,6 +82,7 @@ def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
     fig = plt.figure(figsize=(9,9))
     uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
     vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
+    logging.info(f'k={k}, tile={tile}, {year}-{month}')
     tile_to_plot = hypot(uvel_ds, vvel_ds)
     tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
     plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
@@ -124,7 +125,7 @@ def main(args):
     tile = 10
     k = args.k
     fname, fext = os.path.splitext(particles_results_file)
-    file_pattern = f'{fname}-{k}'
+    file_pattern = f'{fname}-k{k}'
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):

@@ -81,6 +81,47 @@ def outOfTile(x,y):
     else:
         return False
 
+def tileTo(tile, ix, jy):
+    newtile, newi, newj = tile, ix, jy
+    if (ix < 0) and (jy >= 90): # top left
+        pass
+    elif (0 <= ix < 90) and (jy >= 90): # top
+        if tile == 2:
+            newtile, newi, newj = (6, jy-90, 90-ix)
+        elif tile == 10:
+            newtile, newi, newj = 2, jy-90, 90-ix
+    elif (ix >= 90) and (jy >= 90): # top right
+        if tile == 2:
+            pass # undefineable
+        elif tile == 10:
+            newtile, newi, newj = 1, jy-90, 180-ix
+    elif (ix < 0) and (0 <= jy < 90): # left
+        if tile == 2:
+            newtile, newi, newj = 10, 90-jy, 90+ix
+        elif tile == 10:
+            newtile, newi, newj = 6, 90-jy, 90+ix
+    elif (ix >= 90) and (0 <= jy < 90): # right
+        if tile == 2:
+            newtile, newi, newj = 5, ix-90, jy
+        elif tile == 10:
+            newtile, newi, newj = 11, ix-90, jy
+    elif (ix < 0) and (jy < 0): # bottom left
+        if tile == 2:
+            newtile, newi, newj = 11, -jy, 90+ix
+        elif tile == 10:
+            newtile, newi, newj = 6, 90+ix, 90+jy # also ambuguous
+    elif (0 <= ix < 90) and (jy < 0): # bottom
+        if tile == 2:
+            newtile, newi, newj = 1, ix, 90+jy
+        elif tile == 10:
+            newtile, newi, newj = 7, ix, 90+jy
+    elif (ix >= 90) and (jy < 0): # bottom right
+        if tile == 2:
+            newtile, newi, newj = 4, ix-90, 90+jy
+        elif tile == 10:
+            newtile, newi, newj = 8, ix-90, 90+jy
+    return newtile, newi, newj
+
 
 def notMoving(uvel, vvel):
     return uvel == 0 and vvel == 0
@@ -128,13 +169,17 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, disturbing=False, retry=0)
     return (x+dx, y+dy)
 
 
-def read_input(input_file):
+def read_input(input_file, tile, k):
     with open(input_file) as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=',')
         particles = []
         index = 0
         for row in csv_reader:
             particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
+            
+            particle['tile'] = int(row['tile']) if 'tile' in row else tile
+            particle['k'] = int(row['k']) if 'k' in row else k
+
             particles.append(particle)
             index += 1
     return particles
@@ -160,9 +205,11 @@ def get_vel(ecco_ds, k, month, tile, xi, yj):
     return uvel, vvel
 
 
-def particle_position(ecco_ds, particle, tile, k, year, month, results, disturbing=False):
+def particle_position(ecco_ds, particle, year, month, results, disturbing=False):
     if particle['state'] == 'OutOfTile':
         return False
+    tile = particle['tile']
+    k = particle['k']
     xoge = float(particle['xoge'])
     yoge = float(particle['yoge'])
 
@@ -177,27 +224,28 @@ def particle_position(ecco_ds, particle, tile, k, year, month, results, disturbi
         particle['state'] = 'Beached'
         logging.debug("    beached!")
 
-    results.append([tile, k, particle['index'], year, month, xoge, yoge, uvel, vvel])
+    results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel])
 
     xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, disturbing=disturbing, retry=4)
     if outOfTile(xoge, yoge):
+        particle['tile'], particle['xoge'], particle['yoge'] = tileTo(tile, xoge, yoge)
+    # only limited tile-to-tile movement is defined
+    if outOfTile(particle['xoge'], particle['yoge']):
         particle['state'] = 'OutOfTile'
         logging.debug("    particle will be out of tile")
     return True
 
 def main(args):
-    tile = args.tile
-    k = args.k
     input_file = args.inputfile
-    particles = read_input(input_file)
+    particles = read_input(input_file, args.tile, args.k)
 
-    results = [['tile', 'k', 'particle', 'year', 'month', 'xoge', 'yoge', 'uvel', 'vvel']]
+    results = [['particle', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel']]
     base_dir = configure_base_dir()
     for year in range(args.from_year, args.to_year):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:
-                particle_position(ecco_ds, particle, tile, k, year, month, results, disturbing=args.disturbing)
+                particle_position(ecco_ds, particle, year, month, results, disturbing=args.disturbing)
     write_results(input_file, results)
 
 

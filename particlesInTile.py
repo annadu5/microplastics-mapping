@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import pandas as pd
 import sys
 import os
 import matplotlib.pyplot as plt
@@ -14,6 +15,7 @@ import csv
 import random
 import logging
 import argparse
+from subprocess import run
 
 sys.path.append(f'{os.path.expanduser("~")}/ECCOv4-py')
 try:
@@ -64,6 +66,7 @@ def usage():
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
     parser.add_argument('--disturbing', action='store_true', help='Add turbulence to particle movement')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
+    parser.add_argument('--only-plot', action='store_true', help='Only Plot')
     args = parser.parse_args()
     return args
 
@@ -317,7 +320,10 @@ def compute(args):
     return result_file
 
 def main(args):
-    result_file = compute(args)
+    if args.only_plot:
+        result_file = args.inputfile
+    else:
+        result_file = compute(args)
     visualize(result_file, args.k)
 
 

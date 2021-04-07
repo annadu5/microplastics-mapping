@@ -64,7 +64,7 @@ def usage():
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
-    parser.add_argument('--fudge', action='store_true', help='Add turbulence to particle movement')
+    parser.add_argument('--fudge-pct', type=int, default=10, help='Percentage of factor to disturb')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
@@ -141,7 +141,14 @@ def beached(ecco_ds, xoge, yoge, tile, k):
     return int(hfacw) == 0
 
 
-def disturb(uvel, vvel):
+def disturb(uvel, vvel, fudge):
+    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
+    fudge_factor = float(fudge) / 100.0
+    dx = fudge_factor * random.uniform(-0.5, 0.5) * uvel * month_vel_to_pixel
+    dy = fudge_factor * random.uniform(-0.5, 0.5) * vvel * month_vel_to_pixel
+    return dx, dy
+
+def nudge(uvel, vvel):
     dx = random.uniform(-0.5, 0.5) if uvel else 0
     dy = random.uniform(-0.5, 0.5) if vvel else 0
     return dx, dy
@@ -150,27 +157,30 @@ def disturb(uvel, vvel):
 # Move the particle 1 month by its position and vel
 # If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
+def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=0, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
 
-    dx = dy = 0
-    if fudge:
-        # Fudge around half a pixel
-        dx, dy = disturb(uvel, vvel)
+    dx, dy = disturb(uvel, vvel, fudge)
+    newtile, newx, newy = tile, x+dx, y+dy
+    if outOfTile(newx, newy):
+        newtile, newx, newy = tileTo(tile, newx, newy)
 
     for run in range(retry):
-        if outOfTile(x+dx, y+dy):
-            logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
-            dx, dy = disturb(uvel, vvel)
-        elif beached(ecco_ds, x+dx, y+dy, tile, k):
-            logging.debug(f"    {x+dx}, {y+dy}, retry {run+1}")
-            dx, dy = disturb(uvel, vvel)
+        if beached(ecco_ds, newx, newy, newtile, k):
+            logging.debug(f"    {newx}, {newy}, retry {run+1}")
+            dx, dy = nudge(uvel, vvel)
+            newx, newy = x+dx, y+dy
+        if outOfTile(newx, newy):
+            newtile, newx, newy = tileTo(tile, newx, newy)
+            logging.debug(f"    {newx}, {newy}, retry {run+1}")
+            dx, dy = nudge(uvel, vvel)
+            newx, newy = x+dx, y+dy
         else:
             break
 
-    return (x+dx, y+dy)
+    return (newtile, newx, newy, k)
 
 
 def read_input(input_file, tile, k):
@@ -210,7 +220,7 @@ def get_vel(ecco_ds, k, month, tile, xi, yj):
     return uvel, vvel
 
 
-def particle_position(ecco_ds, particle, year, month, results, fudge=False):
+def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     if particle['state'] == 'OutOfTile':
         return False
     tile = particle['tile']
@@ -231,9 +241,12 @@ def particle_position(ecco_ds, particle, year, month, results, fudge=False):
 
     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel])
 
-    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=4)
-    if outOfTile(xoge, yoge):
-        particle['tile'], particle['xoge'], particle['yoge'] = tileTo(tile, xoge, yoge)
+    tile, xoge, yoge, k = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=4)
+
+    particle['tile'] = tile
+    particle['xoge'] = xoge
+    particle['yoge'] = yoge
+    particle['k'] = k
     # only limited tile-to-tile movement is defined
     if outOfTile(particle['xoge'], particle['yoge']):
         particle['state'] = 'OutOfTile'
@@ -327,7 +340,7 @@ def compute(args):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:
-                particle_position(ecco_ds, particle, year, month, results, fudge=args.fudge)
+                particle_position(ecco_ds, particle, year, month, results, fudge=args.fudge_pct)
     result_file = write_results(input_file, results)
     return result_file
 

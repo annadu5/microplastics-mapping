@@ -144,7 +144,7 @@ def beached(ecco_ds, xoge, yoge, tile, k):
 def disturb(uvel, vvel, fudge):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     fudge_factor = float(fudge) / 100.0
-    dx = fudge_factor * random.uniform(-0.5, 0.5) * uvel * month_vel_to_pixel
+    dx = fudge_factor * random.uniform(-0.5, 0.5) * uvel * month_vel_to_pixel *2
     dy = fudge_factor * random.uniform(-0.5, 0.5) * vvel * month_vel_to_pixel
     return dx, dy
 
@@ -168,7 +168,7 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=0, retry=0):
         newtile, newx, newy = tileTo(tile, newx, newy)
 
     for run in range(retry):
-        if beached(ecco_ds, newx, newy, newtile, k):
+        if (not outOfTile(newx, newy)) and beached(ecco_ds, newx, newy, newtile, k):
             logging.debug(f"    {newx}, {newy}, retry {run+1}")
             dx, dy = nudge(uvel, vvel)
             newx, newy = x+dx, y+dy
@@ -235,13 +235,9 @@ def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     if notMoving(uvel, vvel):
         logging.debug("    Not Moving")
 
-    if beached(ecco_ds, xoge, yoge, tile, k):
-        particle['state'] = 'Beached'
-        logging.debug("    beached!")
-
     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel])
 
-    tile, xoge, yoge, k = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=4)
+    tile, xoge, yoge, k = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=0)
 
     particle['tile'] = tile
     particle['xoge'] = xoge
@@ -251,6 +247,12 @@ def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     if outOfTile(particle['xoge'], particle['yoge']):
         particle['state'] = 'OutOfTile'
         logging.debug("    particle will be out of tile")
+    elif beached(ecco_ds, xoge, yoge, tile, k):
+        particle['state'] = 'Beached'
+        logging.debug("    beached!")
+    else:
+        particle['state'] = 'ok'
+
     return True
 
 
@@ -272,11 +274,12 @@ def plot_tile(ecco_ds, tile, k, year, month, results):
     tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
     plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
     plt.colorbar()
-    plt.title(f'Tile {tile}')
+    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
     for index, result in results_match.iterrows():
         logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
         plt.scatter(result.xoge, result.yoge, color='magenta')
+    plt.tight_layout(pad=0)
 
 def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
     logging.info(f'k={k}, tiles={tiles}, {year}-{month}, {outfile}')

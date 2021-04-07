@@ -64,7 +64,7 @@ def usage():
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
-    parser.add_argument('--disturbing', action='store_true', help='Add turbulence to particle movement')
+    parser.add_argument('--fudge', action='store_true', help='Add turbulence to particle movement')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
@@ -148,15 +148,15 @@ def disturb(uvel, vvel):
 
 
 # Move the particle 1 month by its position and vel
-# If disturbing is set, then add a disturb within (-0.5, 0.5)
+# If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, disturbing=False, retry=0):
+def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=False, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
 
     dx = dy = 0
-    if disturbing:
+    if fudge:
         # Fudge around half a pixel
         dx, dy = disturb(uvel, vvel)
 
@@ -210,7 +210,7 @@ def get_vel(ecco_ds, k, month, tile, xi, yj):
     return uvel, vvel
 
 
-def particle_position(ecco_ds, particle, year, month, results, disturbing=False):
+def particle_position(ecco_ds, particle, year, month, results, fudge=False):
     if particle['state'] == 'OutOfTile':
         return False
     tile = particle['tile']
@@ -231,7 +231,7 @@ def particle_position(ecco_ds, particle, year, month, results, disturbing=False)
 
     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel])
 
-    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, disturbing=disturbing, retry=4)
+    xoge, yoge = particle['xoge'], particle['yoge'] = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=4)
     if outOfTile(xoge, yoge):
         particle['tile'], particle['xoge'], particle['yoge'] = tileTo(tile, xoge, yoge)
     # only limited tile-to-tile movement is defined
@@ -327,7 +327,7 @@ def compute(args):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:
-                particle_position(ecco_ds, particle, year, month, results, disturbing=args.disturbing)
+                particle_position(ecco_ds, particle, year, month, results, fudge=args.fudge)
     result_file = write_results(input_file, results)
     return result_file
 

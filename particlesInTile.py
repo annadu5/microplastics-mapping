@@ -66,6 +66,7 @@ def usage():
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
     parser.add_argument('--disturbing', action='store_true', help='Add turbulence to particle movement')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
+    parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
     args = parser.parse_args()
     return args
@@ -251,22 +252,33 @@ def hypot(uvel_ds, vvel_ds):
     return vel_ds
 
 
-def plot_vel(ecco_ds, tile, k, year, month, results, outfile):
-    fig = plt.figure(figsize=(9,9))
+def plot_tile(ecco_ds, tile, k, year, month, results):
     uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
     vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
-    logging.info(f'k={k}, tile={tile}, {year}-{month}')
     tile_to_plot = hypot(uvel_ds, vvel_ds)
     tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
     plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
     plt.colorbar()
-    plt.title(f'{year}-{month+1}')
-    results_month = results[(results.year == year) & (results.month == month)]
-    for index, result in results_month.iterrows():
+    plt.title(f'Tile {tile}')
+    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+    for index, result in results_match.iterrows():
         logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.xoge, result.yoge, color='black')
+        plt.scatter(result.xoge, result.yoge, color='magenta')
+
+def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
+    logging.info(f'k={k}, tiles={tiles}, {year}-{month}, {outfile}')
+    fig = plt.figure(figsize=(12,12))
+    plt.title(f'{year}-{month+1}')
+    for tile in tiles:
+        if tile == 10:
+            fig = plt.subplot(222)
+            plot_tile(ecco_ds, tile, k, year, month, results)
+        elif tile == 2:
+            fig = plt.subplot(223)
+            plot_tile(ecco_ds, tile, k, year, month, results)
     plt.savefig(outfile)
     # plt.show()
+    return outfile
 
 
 def rotate_file(file_pattern):
@@ -292,14 +304,14 @@ def visualize(result_csv, k):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
     count = 0
-    tile = 10
+    tiles = [10, 2]
     fname, fext = os.path.splitext(result_csv)
     file_pattern = f'{fname}-k{k}'
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             outfile = f'{file_pattern}_{count:03}.png'
-            plot_vel(ecco_ds, tile, k, year, month, results, outfile)
+            plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
             count += 1
     
     gen_mp4(file_pattern, keep_png=args.debug)
@@ -319,6 +331,21 @@ def compute(args):
     result_file = write_results(input_file, results)
     return result_file
 
+def test(args):
+    base_dir = configure_base_dir()
+    result_csv = args.inputfile
+    results = pd.read_csv(result_csv)
+    count = 0
+    k = args.k
+    tiles = [10, 2]
+    fname, fext = os.path.splitext(result_csv)
+    file_pattern = f'{fname}-k{k}'
+    year, month = 2005, 10
+    ecco_ds = load_ecco_ds(int(year), base_dir)
+    outfile = f'{file_pattern}_{count:03}.png'
+    plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+
+
 def main(args):
     if args.only_plot:
         result_file = args.inputfile
@@ -333,4 +360,8 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
-    main(args)
+
+    if args.test:
+        test(args)
+    else:
+        main(args)

@@ -384,21 +384,24 @@ def gen_mp4(file_pattern, keep_png=False):
     logging.info(f' Generated {file_pattern}.mp4')
 
 
-def visualize(result_csv, k):
+def visualize(result_csv, k, years=[], months=[]):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
     count = 0
     tiles = [10, 2]
     file_pattern, fext = os.path.splitext(result_csv)
-    for year in np.sort(results.year.unique()):
+    plot_years = years if years else results.year.unique()
+    for year in np.sort(plot_years):
         ecco_ds = load_ecco_ds(int(year), base_dir)
-        for month in range(12):
+        plot_months = months if months else range(12)
+        for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
-            # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
-            plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
+            plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+            # plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
     
-    gen_mp4(file_pattern, keep_png=args.debug)
+    if not (years and months):
+        gen_mp4(file_pattern, keep_png=args.debug)
 
 
 def compute(args):
@@ -435,7 +438,13 @@ def main(args):
         result_file = args.inputfile
     else:
         result_file = compute(args)
-    visualize(result_file, args.k)
+
+    years, months = [], []
+    if args.png_ym:
+        y,m = args.png_ym.split(':')
+        years = [int(y)]
+        months = [int(m)-1]
+    visualize(result_file, args.k, years=years, months=months)
 
 
 if __name__ == '__main__':

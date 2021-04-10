@@ -12,6 +12,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.path as mpath
 import csv
+import math
 import random
 import logging
 import argparse
@@ -68,6 +69,7 @@ def usage():
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
+    parser.add_argument('--png-ym', help='year:month')
     args = parser.parse_args()
     return args
 
@@ -141,11 +143,21 @@ def beached(ecco_ds, xoge, yoge, tile, k):
     return int(hfacw) == 0
 
 
-def disturb(uvel, vvel, fudge):
+def disturb(uvel, vvel, ix, jy, fudge):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
-    fudge_factor = float(fudge) / 100.0
-    dx = fudge_factor * random.uniform(-0.5, 0.5) * uvel * month_vel_to_pixel *2
-    dy = fudge_factor * random.uniform(-0.5, 0.5) * vvel * month_vel_to_pixel
+    xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
+    yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
+
+    vel = math.hypot(uvel, vvel)
+    xfactor *= 10 ** vel
+    yfactor *= 10 ** vel
+
+    if 65 <= ix <= 70:
+        # xfactor = -abs(xfactor)
+        yfactor = -0.99
+
+    dx = xfactor * uvel * month_vel_to_pixel
+    dy = yfactor * vvel * month_vel_to_pixel
     return dx, dy
 
 def nudge(uvel, vvel):
@@ -162,7 +174,7 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=0, retry=0):
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
 
-    dx, dy = disturb(uvel, vvel, fudge)
+    dx, dy = disturb(uvel, vvel, x, y, fudge)
     newtile, newx, newy = tile, x+dx, y+dy
     if outOfTile(newx, newy):
         newtile, newx, newy = tileTo(tile, newx, newy)
@@ -201,9 +213,15 @@ def read_input(input_file, tile, k):
 
 def write_results(input_file, results):
     # output path is adds results_ to input file
-    output_path = 'results_' + os.path.basename(input_file)
-    if os.path.dirname(input_file):
-        output_path = os.path.dirname(input_file) + output_path
+    input_dir = os.path.dirname(input_file)
+    input_fpattern, fext = os.path.splitext(os.path.basename(input_file))
+    output_pattern = f'results_{input_fpattern}'
+    if input_dir:
+        output_pattern = f'{input_dir}/{output_pattern}'
+
+    rotate_files(output_pattern)
+
+    output_path = output_pattern + '.csv'
     with open(output_path, mode='w+', newline='') as out_file:
         out_writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for result in results:
@@ -297,18 +315,68 @@ def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
     return outfile
 
 
-def rotate_file(file_pattern):
-    file_to_save = file_pattern+'.mp4'
-    if os.path.isfile(file_to_save):
+def plot_tiles_2_10(ecco_ds, k, year, month, results, outfile):
+    fig = plt.figure(figsize=(12,6))
+
+    # tile 2
+    tile = 2
+    fig = plt.subplot(122)
+    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
+    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
+    tile_to_plot = hypot(uvel_ds, vvel_ds)
+    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
+    plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
+    plt.colorbar()
+    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
+    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+    for index, result in results_match.iterrows():
+        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
+        plt.scatter(result.xoge, result.yoge, color='magenta')
+    plt.tight_layout(pad=0)
+
+    # tile 10
+    tile = 10
+    fig = plt.subplot(121)
+    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
+    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
+    tile_to_plot = hypot(uvel_ds, vvel_ds)
+    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
+    arr_to_plot = tile_to_plot
+    # arr_to_plot = np.swapaxes(tile_to_plot.values, 0, 1)
+    # arr_to_plot = tile_to_plot.copy()
+    # # This has a lot of computation
+    # for i in range(90):
+    #     for j in range(90):
+    #         arr_to_plot[i][j] = tile_to_plot[j][89-i]
+    plt.imshow(arr_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
+    plt.colorbar()
+    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
+    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+    for index, result in results_match.iterrows():
+        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
+        plt.scatter(result.yoge, 89-result.xoge, color='magenta')
+    plt.tight_layout(pad=0)
+
+    plt.savefig(outfile)
+    # plt.show()
+    return outfile
+
+
+def rotate_files(file_pattern):
+    file_mp4 = file_pattern+'.mp4'
+    file_csv = file_pattern+'.csv'
+    if os.path.isfile(file_mp4):
         for i in range(100):
-            file_backup = f'{file_pattern}_{i}.mp4'
-            if not os.path.exists(file_backup):
-                os.rename(file_to_save, file_backup)
+            mp4_backup = f'{file_pattern}_{i}.mp4'
+            csv_backup = f'{file_pattern}_{i}.csv'
+            if (not os.path.exists(mp4_backup)) and (not os.path.exists(csv_backup)):
+                os.rename(file_mp4, mp4_backup)
+                os.rename(file_csv, csv_backup)
                 break
 
 
 def gen_mp4(file_pattern, keep_png=False):
-    rotate_file(file_pattern)
+    rotate_files(file_pattern)
     cmd = f'ffmpeg -r 24 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
     if not keep_png:
@@ -321,13 +389,13 @@ def visualize(result_csv, k):
     results = pd.read_csv(result_csv)
     count = 0
     tiles = [10, 2]
-    fname, fext = os.path.splitext(result_csv)
-    file_pattern = f'{fname}-k{k}'
+    file_pattern, fext = os.path.splitext(result_csv)
     for year in np.sort(results.year.unique()):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             outfile = f'{file_pattern}_{count:03}.png'
-            plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+            # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+            plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
     
     gen_mp4(file_pattern, keep_png=args.debug)

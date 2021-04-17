@@ -250,7 +250,8 @@ def read_input(input_file, tile=10, k=0):
                     'tile': int(row['tile']) if 'tile' in row else tile,
                     'xoge': float(row['xoge']),
                     'yoge': float(row['yoge']),
-                    'k': float(row['k']) if 'k' in row else k
+                    'k': float(row['k']) if 'k' in row else k,
+                    'state': ''
                    }
         particles.append(particle)
     return particles
@@ -302,40 +303,37 @@ def refresh_particle(particle, results):
             return
 
 def add_to_results(particle, results):
-    results.append([
-        particle['index'], 
-        particle['year'],
-        particle['month'],
-        particle['tile'],
-        particle['xoge'],
-        particle['yoge'],
-        particle['k'],
-        particle['uvel'],
-        particle['vvel'],
-        particle['kvel']
-    ])
+    result = []
+    for column in results[0]:
+        result.append(particle[column])
+    results.append(result)
+
 
 def particle_position(ecco_ds, particle, results, fudge=0):
     # When calling this function, expect the particle to be up-to-date
     # on positions, i.e. index, tile, xoge, yoge, k, and year, month,
-    # but vels (uvel, vvel, kvel) need refresh
+    # but vels (uvel, vvel, kvel) need refreshing
 
     # Ignore out-of-tile ones -- only limited tiles are processed
     if outOfTile(particle['xoge'], particle['yoge']):
         logging.info("    particle is out of tile")
+        particle['state'] = 'OutOfTile'
         return False
 
     # If beached then refresh particle. TODO: create new particle
     if beached(ecco_ds, particle):
+        particle['state'] = 'Beached'
         refresh_particle(particle, results)
 
     update_velocities(ecco_ds, particle)
 
-    logging.info(f" {particle['year']}/{particle['month']}" \
-        f" PARTICLE {particle['index']} tile {particle['tile']}" \
-        f" @ ({particle['xoge']}, {particle['yoge']}, {particle['k']})" \
-        f" vel=({particle['uvel']}, {particle['vvel']}, {particle['kvel']})"
-    )
+    particle['state'] = 'OK'
+    # logging.info(f" {particle['year']}/{particle['month']}" \
+    #     f" PARTICLE {particle['index']} tile {particle['tile']}" \
+    #     f" @ ({particle['xoge']}, {particle['yoge']}, {particle['k']})" \
+    #     f" vel=({particle['uvel']}, {particle['vvel']}, {particle['kvel']})"
+    # )
+    logging.info(f' {particle}')
 
     # everything is up-to-date, save it
     add_to_results(particle, results)
@@ -507,7 +505,8 @@ def compute(args):
     input_file = args.inputfile
     particles = read_input(input_file, args.tile, args.k)
 
-    results = [['particle', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel']]
+    columns = ['index', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
+    results = [columns]
     base_dir = configure_base_dir()
     for year in range(args.from_year, args.to_year):
         ecco_ds = load_ecco_ds(int(year), base_dir)

@@ -141,13 +141,22 @@ def notMoving(uvel, vvel):
     return uvel == 0 and vvel == 0
 
 
-def get_hfacw(ecco_ds, k, tile, xi, yj):
+def get_hfacw(ecco_ds, tile, xi, yj, k):
     # hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
     hfacw = float(ecco_ds.hFacW.isel(k=int(k), tile=tile, i_g=int(xi), j=int(yj)).values)
     return hfacw
 
-def beached(ecco_ds, xoge, yoge, tile, k):
-    hfacw = get_hfacw(ecco_ds, k, tile, xoge, yoge)
+# Call beached(ecco_ds, particle) or beached(ecco_ds, tile, xoge, yoge, k)
+def beached(ecco_ds, tile_or_particle, xoge=None, yoge=None, k=None):
+    if type(tile_or_particle) == int:
+        tile = tile_or_particle
+    else: # particle
+        tile = tile_or_particle['tile']
+        xoge = tile_or_particle['xoge']
+        yoge = tile_or_particle['yoge']
+        k = tile_or_particle['k']
+
+    hfacw = get_hfacw(ecco_ds, tile, xoge, yoge, k)
     return int(hfacw) == 0
 
 
@@ -204,7 +213,7 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
         newtile, newx, newy = adjustTile(tile, newx, newy)
 
     for run in range(retry):
-        if (not outOfTile(newx, newy)) and beached(ecco_ds, newx, newy, newtile, k):
+        if (not outOfTile(newx, newy)) and beached(ecco_ds, newtile, newx, newy, k):
             logging.debug(f"    {newx}, {newy}, retry {run+1}")
             dx, dy = nudge(uvel, vvel)
             newx, newy = x+dx, y+dy
@@ -259,7 +268,10 @@ def get_vel(ecco_ds, month, tile, xi, yj, k):
     # vvel = ecco_ds.VVEL.values[month,int(k), tile,int(yoge),int(xoge)]
     uvel = float(ecco_ds.UVEL.isel(time=month, k=int(k), j=int(yj), i_g=int(xi), tile=tile).values)
     vvel = float(ecco_ds.VVEL.isel(time=month, k=int(k), j_g=int(yj), i=int(xi), tile=tile).values)
-    return uvel, vvel
+    kvel = 0.3 # go down 1 layer every 100 days
+    if beached(ecco_ds, tile, xi, yj, k):
+        kvel = 0
+    return uvel, vvel, kvel
 
 def refresh_particle(particle, results):
     # assuming an ordered list
@@ -274,29 +286,34 @@ def refresh_particle(particle, results):
 # def add_to_results(particle, results):
     # results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
 
-def particle_position(ecco_ds, particle, year, month, results, fudge=0):
+def particle_position(ecco_ds, particle, results, fudge=0):
+    # When calling this function, expect the particle to be up-to-date
+    # on positions, i.e. index, tile, xoge, yoge, k, and year, month,
+    # but vels (uvel, vvel, kvel) need refresh
+
+    # Ignore out-of-tile ones
     if outOfTile(particle['xoge'], particle['yoge']):
         return False
+
+    year = particle['year']
+    month = particle['month']
     tile = particle['tile']
     k = float(particle['k'])
     xoge = float(particle['xoge'])
     yoge = float(particle['yoge'])
 
-    uvel, vvel = get_vel(ecco_ds, month, tile, xoge, yoge, k)
-
-    kvel = 0.3 # go down 1 k every 10 month
-    if beached(ecco_ds, xoge, yoge, tile, k):
-        # kvel = 0
+    # If beached then refresh particle. TODO: create new particle
+    if beached(ecco_ds, particle):
         refresh_particle(particle, results)
         tile = particle['tile']
         k = float(particle['k'])
         xoge = float(particle['xoge'])
         yoge = float(particle['yoge'])
 
-    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel}, {kvel})")
+    # Update velocities
+    uvel, vvel, kvel = get_vel(ecco_ds, month, tile, xoge, yoge, k)
 
-    if notMoving(uvel, vvel):
-        logging.debug("    Not Moving")
+    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel}, {kvel})")
 
     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
 
@@ -309,7 +326,7 @@ def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     # only limited tile-to-tile movement is defined
     if outOfTile(particle['xoge'], particle['yoge']):
         logging.debug("    particle will be out of tile")
-    elif beached(ecco_ds, xoge, yoge, tile, k):
+    elif beached(ecco_ds, tile, xoge, yoge, k):
         logging.debug("    beached!")
 
     return True
@@ -484,7 +501,7 @@ def compute(args):
             for particle in particles:
                 particle['year'] = year
                 particle['month'] = month
-                particle_position(ecco_ds, particle, year, month, results, fudge=args.fudge_pct)
+                particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
     extra_info = f'f{args.fudge_pct}'
     result_file = write_results(input_file, results, extra=extra_info)
     return result_file

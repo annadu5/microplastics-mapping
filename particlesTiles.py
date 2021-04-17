@@ -71,7 +71,7 @@ def usage():
     parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
-    parser.add_argument('--fudge-pct', type=int, default=10, help='Percentage of factor to disturb')
+    parser.add_argument('--fudge-pct', type=int, default=50, help='Percentage of factor to disturb')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
@@ -93,7 +93,7 @@ def outOfTile(x,y):
     else:
         return False
 
-def tileTo(tile, ix, jy):
+def adjustTile(tile, ix, jy):
     newtile, newi, newj = tile, ix, jy
     if (ix < 0) and (jy >= 90): # top left
         pass
@@ -132,6 +132,8 @@ def tileTo(tile, ix, jy):
             newtile, newi, newj = 4, ix-90, 90+jy
         elif tile == 10:
             newtile, newi, newj = 8, ix-90, 90+jy
+    else: # within the tile
+        pass
     return newtile, newi, newj
 
 
@@ -199,7 +201,7 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
     dx, dy = disturb(uvel, vvel, x, y, fudge)
     newtile, newx, newy = tile, x+dx, y+dy
     if outOfTile(newx, newy):
-        newtile, newx, newy = tileTo(tile, newx, newy)
+        newtile, newx, newy = adjustTile(tile, newx, newy)
 
     for run in range(retry):
         if (not outOfTile(newx, newy)) and beached(ecco_ds, newx, newy, newtile, k):
@@ -207,7 +209,7 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
             dx, dy = nudge(uvel, vvel)
             newx, newy = x+dx, y+dy
         if outOfTile(newx, newy):
-            newtile, newx, newy = tileTo(tile, newx, newy)
+            newtile, newx, newy = adjustTile(tile, newx, newy)
             logging.debug(f"    {newx}, {newy}, retry {run+1}")
             dx, dy = nudge(uvel, vvel)
             newx, newy = x+dx, y+dy
@@ -225,19 +227,21 @@ def read_input(input_file, tile=10, k=0):
                     'tile': int(row['tile']) if 'tile' in row else tile,
                     'xoge': float(row['xoge']),
                     'yoge': float(row['yoge']),
-                    'k': float(row['k']) if 'k' in row else k,
-                    'state': 'ok'}
+                    'k': float(row['k']) if 'k' in row else k
+                   }
         particles.append(particle)
     return particles
 
 
-def write_results(input_file, results):
-    # output path is adds results_ to input file
+def write_results(input_file, results, extra=''):
+    # output path is adds results_ to input file name
     input_dir = os.path.dirname(input_file)
     input_fpattern, fext = os.path.splitext(os.path.basename(input_file))
     output_pattern = f'results_{input_fpattern}'
     if input_dir:
         output_pattern = f'{input_dir}/{output_pattern}'
+    if extra:
+        output_pattern = f'{output_pattern}_{extra}'
 
     rotate_files(output_pattern)
 
@@ -268,10 +272,10 @@ def refresh_particle(particle, results):
             return
 
 # def add_to_results(particle, results):
-#     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
+    # results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
 
 def particle_position(ecco_ds, particle, year, month, results, fudge=0):
-    if particle['state'] == 'OutOfTile':
+    if outOfTile(particle['xoge'], particle['yoge']):
         return False
     tile = particle['tile']
     k = float(particle['k'])
@@ -304,13 +308,9 @@ def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     particle['k'] = k
     # only limited tile-to-tile movement is defined
     if outOfTile(particle['xoge'], particle['yoge']):
-        particle['state'] = 'OutOfTile'
         logging.debug("    particle will be out of tile")
     elif beached(ecco_ds, xoge, yoge, tile, k):
-        particle['state'] = 'Beached'
         logging.debug("    beached!")
-    else:
-        particle['state'] = 'ok'
 
     return True
 
@@ -425,18 +425,24 @@ def plot_tiles_2_10(ecco_ds, k, year, month, results, outfile):
 def rotate_files(file_pattern):
     file_mp4 = file_pattern+'.mp4'
     file_csv = file_pattern+'.csv'
-    if os.path.isfile(file_mp4):
-        for i in range(100):
-            mp4_backup = f'{file_pattern}_{i}.mp4'
-            csv_backup = f'{file_pattern}_{i}.csv'
-            if (not os.path.exists(mp4_backup)) and (not os.path.exists(csv_backup)):
+    if (not os.path.exists(file_mp4)) and (not os.path.exists(file_csv)):
+        return
+
+    for i in range(100):
+        mp4_backup = f'{file_pattern}_{i}.mp4'
+        csv_backup = f'{file_pattern}_{i}.csv'
+        if (not os.path.exists(mp4_backup)) and (not os.path.exists(csv_backup)):
+            if os.path.exists(file_mp4):
+                logging.info(f'{file_mp4} => {mp4_backup}')
                 os.rename(file_mp4, mp4_backup)
+            if os.path.exists(file_csv):
+                logging.info(f'{file_csv} => {csv_backup}')
                 os.rename(file_csv, csv_backup)
-                break
+            break
 
 
 def gen_mp4(file_pattern, keep_png=False):
-    rotate_files(file_pattern)
+    # rotate_files(file_pattern)
     cmd = f'ffmpeg -r 24 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
     if not keep_png:
@@ -476,8 +482,11 @@ def compute(args):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:
+                particle['year'] = year
+                particle['month'] = month
                 particle_position(ecco_ds, particle, year, month, results, fudge=args.fudge_pct)
-    result_file = write_results(input_file, results)
+    extra_info = f'f{args.fudge_pct}'
+    result_file = write_results(input_file, results, extra=extra_info)
     return result_file
 
 def test(args):

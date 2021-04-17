@@ -25,6 +25,13 @@ except Exception as e:
     print('Please add ECCOv4-py to System Environment PYTHONPATH!', file=sys.stderr)
     raise(e)
 
+# convert velocity from meter/second to degree/month
+MPS_TO_DEG_PER_MONTH = (365.0/12) * 24 * 3600 / (40075017.0/360)
+
+# Sinking speed, assuming 1 layer per 100 days
+KVEL = 0.3
+
+# index for next particle
 particle_index = 0
 def next_particle_index():
     global particle_index
@@ -161,7 +168,6 @@ def beached(ecco_ds, tile_or_particle, xoge=None, yoge=None, k=None):
 
 
 def disturb_exp(uvel, vvel, ix, jy, fudge):
-    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
 
@@ -173,17 +179,16 @@ def disturb_exp(uvel, vvel, ix, jy, fudge):
         # xfactor = -abs(xfactor)
         yfactor = -0.99
 
-    dx = xfactor * uvel * month_vel_to_pixel
-    dy = yfactor * vvel * month_vel_to_pixel
+    dx = xfactor * uvel * MPS_TO_DEG_PER_MONTH
+    dy = yfactor * vvel * MPS_TO_DEG_PER_MONTH
     return dx, dy
 
 def disturb_simple(uvel, vvel, ix, jy, fudge):
-    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
 
-    dx = xfactor * uvel * month_vel_to_pixel
-    dy = yfactor * vvel * month_vel_to_pixel
+    dx = xfactor * uvel * MPS_TO_DEG_PER_MONTH
+    dy = yfactor * vvel * MPS_TO_DEG_PER_MONTH
     return dx, dy
 
 def disturb(uvel, vvel, ix, jy, fudge):
@@ -195,23 +200,31 @@ def nudge(uvel, vvel):
     dy = random.uniform(-0.5, 0.5) if vvel else 0
     return dx, dy
 
+def mps_to_degreePerMonth():
+    return (365.0/12) * 24 * 3600 / (40075017.0/360)
 
 # Move the particle 1 month by its position and vel
 # If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0):
-    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
-    x = float(x0) + uvel * month_vel_to_pixel
-    y = float(y0) + vvel * month_vel_to_pixel
+def move_1month(ecco_ds, particle, fudge=0, retry=0):
+    tile = particle['tile']
+    x0,y0,k0 = particle['xoge'], particle['yoge'], particle['k']
+    uvel,vvel,kvel = particle['uvel'], particle['vvel'], particle['kvel']
+
+    # new position by ecco data
+    x = float(x0) + uvel * MPS_TO_DEG_PER_MONTH
+    y = float(y0) + vvel * MPS_TO_DEG_PER_MONTH
     k = k0
     if (k0+kvel) < ecco_ds.hFacW.sizes['k']:
         k = k0 + kvel
 
+    # randomize the move
     dx, dy = disturb(uvel, vvel, x, y, fudge)
     newtile, newx, newy = tile, x+dx, y+dy
     if outOfTile(newx, newy):
         newtile, newx, newy = adjustTile(tile, newx, newy)
 
+    # Could retry the move in condition
     for run in range(retry):
         if (not outOfTile(newx, newy)) and beached(ecco_ds, newtile, newx, newy, k):
             logging.debug(f"    {newx}, {newy}, retry {run+1}")
@@ -225,7 +238,8 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
         else:
             break
 
-    return (newtile, newx, newy, k)
+    particle['tile'] = newtile
+    particle['xoge'], particle['yoge'], particle['k'] = newx, newy, k
 
 
 def read_input(input_file, tile=10, k=0):
@@ -263,15 +277,19 @@ def write_results(input_file, results, extra=''):
     return output_path
 
 
-def get_vel(ecco_ds, month, tile, xi, yj, k):
+def update_velocities(ecco_ds, particle):
+    month = particle['month']
+    tile = particle['tile']
+    ix = int(particle['xoge'])
+    jy = int(particle['yoge'])
+    k = int(particle['k'])
     # uvel = ecco_ds.UVEL.values[month,int(k), tile,int(yoge),int(xoge)]
     # vvel = ecco_ds.VVEL.values[month,int(k), tile,int(yoge),int(xoge)]
-    uvel = float(ecco_ds.UVEL.isel(time=month, k=int(k), j=int(yj), i_g=int(xi), tile=tile).values)
-    vvel = float(ecco_ds.VVEL.isel(time=month, k=int(k), j_g=int(yj), i=int(xi), tile=tile).values)
-    kvel = 0.3 # go down 1 layer every 100 days
-    if beached(ecco_ds, tile, xi, yj, k):
-        kvel = 0
-    return uvel, vvel, kvel
+    particle['uvel'] = float(ecco_ds.UVEL.isel(time=month, k=k, j=jy, i_g=ix, tile=tile).values)
+    particle['vvel'] = float(ecco_ds.VVEL.isel(time=month, k=k, j_g=jy, i=ix, tile=tile).values)
+    particle['kvel'] = KVEL
+    if beached(ecco_ds, tile, ix, jy, k):
+        particle['kvel'] = 0
 
 def refresh_particle(particle, results):
     # assuming an ordered list
@@ -283,51 +301,47 @@ def refresh_particle(particle, results):
             particle['k'] = result[6]
             return
 
-# def add_to_results(particle, results):
-    # results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
+def add_to_results(particle, results):
+    results.append([
+        particle['index'], 
+        particle['year'],
+        particle['month'],
+        particle['tile'],
+        particle['xoge'],
+        particle['yoge'],
+        particle['k'],
+        particle['uvel'],
+        particle['vvel'],
+        particle['kvel']
+    ])
 
 def particle_position(ecco_ds, particle, results, fudge=0):
     # When calling this function, expect the particle to be up-to-date
     # on positions, i.e. index, tile, xoge, yoge, k, and year, month,
     # but vels (uvel, vvel, kvel) need refresh
 
-    # Ignore out-of-tile ones
+    # Ignore out-of-tile ones -- only limited tiles are processed
     if outOfTile(particle['xoge'], particle['yoge']):
+        logging.info("    particle is out of tile")
         return False
-
-    year = particle['year']
-    month = particle['month']
-    tile = particle['tile']
-    k = float(particle['k'])
-    xoge = float(particle['xoge'])
-    yoge = float(particle['yoge'])
 
     # If beached then refresh particle. TODO: create new particle
     if beached(ecco_ds, particle):
         refresh_particle(particle, results)
-        tile = particle['tile']
-        k = float(particle['k'])
-        xoge = float(particle['xoge'])
-        yoge = float(particle['yoge'])
 
-    # Update velocities
-    uvel, vvel, kvel = get_vel(ecco_ds, month, tile, xoge, yoge, k)
+    update_velocities(ecco_ds, particle)
 
-    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel}, {kvel})")
+    logging.info(f" {particle['year']}/{particle['month']}" \
+        f" PARTICLE {particle['index']} tile {particle['tile']}" \
+        f" @ ({particle['xoge']}, {particle['yoge']}, {particle['k']})" \
+        f" vel=({particle['uvel']}, {particle['vvel']}, {particle['kvel']})"
+    )
 
-    results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
+    # everything is up-to-date, save it
+    add_to_results(particle, results)
 
-    tile, xoge, yoge, k = move_1month(ecco_ds, tile, xoge, yoge, k, uvel, vvel, kvel, fudge=fudge, retry=0)
-
-    particle['tile'] = tile
-    particle['xoge'] = xoge
-    particle['yoge'] = yoge
-    particle['k'] = k
-    # only limited tile-to-tile movement is defined
-    if outOfTile(particle['xoge'], particle['yoge']):
-        logging.debug("    particle will be out of tile")
-    elif beached(ecco_ds, tile, xoge, yoge, k):
-        logging.debug("    beached!")
+    # move to next month's position(tile, x,y,k) based on pos and vel this month
+    move_1month(ecco_ds, particle, fudge=fudge, retry=0)
 
     return True
 

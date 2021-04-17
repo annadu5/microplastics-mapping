@@ -135,7 +135,7 @@ def notMoving(uvel, vvel):
 
 def get_hfacw(ecco_ds, k, tile, xi, yj):
     # hfacw = ecco_ds.hFacW.values[k,tile,int(yoge),int(xoge)]
-    hfacw = float(ecco_ds.hFacW.isel(k=k, tile=tile, i_g=int(xi), j=int(yj)).values)
+    hfacw = float(ecco_ds.hFacW.isel(k=int(k), tile=tile, i_g=int(xi), j=int(yj)).values)
     return hfacw
 
 def beached(ecco_ds, xoge, yoge, tile, k):
@@ -143,7 +143,7 @@ def beached(ecco_ds, xoge, yoge, tile, k):
     return int(hfacw) == 0
 
 
-def disturb(uvel, vvel, ix, jy, fudge):
+def disturb_exp(uvel, vvel, ix, jy, fudge):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
@@ -160,6 +160,19 @@ def disturb(uvel, vvel, ix, jy, fudge):
     dy = yfactor * vvel * month_vel_to_pixel
     return dx, dy
 
+def disturb_simple(uvel, vvel, ix, jy, fudge):
+    month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
+    xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
+    yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
+
+    dx = xfactor * uvel * month_vel_to_pixel
+    dy = yfactor * vvel * month_vel_to_pixel
+    return dx, dy
+
+def disturb(uvel, vvel, ix, jy, fudge):
+    # return disturb_exp(uvel, vvel, ix, jy, fudge)
+    return disturb_simple(uvel, vvel, ix, jy, fudge)
+
 def nudge(uvel, vvel):
     dx = random.uniform(-0.5, 0.5) if uvel else 0
     dy = random.uniform(-0.5, 0.5) if vvel else 0
@@ -169,10 +182,13 @@ def nudge(uvel, vvel):
 # Move the particle 1 month by its position and vel
 # If fudge is set, then add a disturb within (-0.5, 0.5)
 # If retry is set, then retry if the particle moves out of tile
-def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=0, retry=0):
+def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0):
     month_vel_to_pixel = (365.0/12) * 24 * 3600 / (40075017.0/360)
     x = float(x0) + uvel * month_vel_to_pixel
     y = float(y0) + vvel * month_vel_to_pixel
+    k = k0
+    if (k0+kvel) < ecco_ds.hFacW.sizes['k']:
+        k = k0 + kvel
 
     dx, dy = disturb(uvel, vvel, x, y, fudge)
     newtile, newx, newy = tile, x+dx, y+dy
@@ -194,17 +210,19 @@ def move_1month(ecco_ds, x0, y0, uvel, vvel, tile, k, fudge=0, retry=0):
 
     return (newtile, newx, newy, k)
 
-
-def read_input(input_file, tile, k):
+# if idx is specified, then only return that particle
+def read_input(input_file, tile, k=0, idx=-1):
     with open(input_file) as csv_file:
         csv_reader = csv.DictReader(csv_file, delimiter=',')
         particles = []
         index = 0
         for row in csv_reader:
+            if idx >=0 and idx != index:
+                continue
             particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
             
             particle['tile'] = int(row['tile']) if 'tile' in row else tile
-            particle['k'] = int(row['k']) if 'k' in row else k
+            particle['k'] = float(row['k']) if 'k' in row else k
 
             particles.append(particle)
             index += 1
@@ -230,32 +248,50 @@ def write_results(input_file, results):
     return output_path
 
 
-def get_vel(ecco_ds, k, month, tile, xi, yj):
-    # uvel = ecco_ds.UVEL.values[month,k, tile,int(yoge),int(xoge)]
-    # vvel = ecco_ds.VVEL.values[month,k, tile,int(yoge),int(xoge)]
-    uvel = float(ecco_ds.UVEL.isel(time=month, k=k, j=int(yj), i_g=int(xi), tile=tile).values)
-    vvel = float(ecco_ds.VVEL.isel(time=month, k=k, j_g=int(yj), i=int(xi), tile=tile).values)
+def get_vel(ecco_ds, month, tile, xi, yj, k):
+    # uvel = ecco_ds.UVEL.values[month,int(k), tile,int(yoge),int(xoge)]
+    # vvel = ecco_ds.VVEL.values[month,int(k), tile,int(yoge),int(xoge)]
+    uvel = float(ecco_ds.UVEL.isel(time=month, k=int(k), j=int(yj), i_g=int(xi), tile=tile).values)
+    vvel = float(ecco_ds.VVEL.isel(time=month, k=int(k), j_g=int(yj), i=int(xi), tile=tile).values)
     return uvel, vvel
 
+def refresh_particle(particle, results):
+    # assuming an ordered list
+    for result in results:
+        if result[0] == particle['index'] and result[1] == 1992 and result[2] == 0:
+            particle['tile'] = result[3]
+            particle['xoge'] = result[4]
+            particle['yoge'] = result[5]
+            particle['k'] = result[6]
+            return
 
 def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     if particle['state'] == 'OutOfTile':
         return False
     tile = particle['tile']
-    k = particle['k']
+    k = float(particle['k'])
     xoge = float(particle['xoge'])
     yoge = float(particle['yoge'])
 
-    uvel, vvel = get_vel(ecco_ds, k, month, tile, xoge, yoge)
+    uvel, vvel = get_vel(ecco_ds, month, tile, xoge, yoge, k)
 
-    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel})")
+    kvel = 0.3 # go down 1 k every 10 month
+    if beached(ecco_ds, xoge, yoge, tile, k):
+        # kvel = 0
+        refresh_particle(particle, results)
+        tile = particle['tile']
+        k = float(particle['k'])
+        xoge = float(particle['xoge'])
+        yoge = float(particle['yoge'])
+
+    logging.info(f" tile {tile} k {k} PARTICLE {particle['index']} {year}/{month} @ ({xoge},{yoge}) vel: ({uvel}, {vvel}, {kvel})")
 
     if notMoving(uvel, vvel):
         logging.debug("    Not Moving")
 
-    results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel])
+    results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
 
-    tile, xoge, yoge, k = move_1month(ecco_ds, xoge, yoge, uvel, vvel, tile, k, fudge=fudge, retry=0)
+    tile, xoge, yoge, k = move_1month(ecco_ds, tile, xoge, yoge, k, uvel, vvel, kvel, fudge=fudge, retry=0)
 
     particle['tile'] = tile
     particle['xoge'] = xoge
@@ -284,19 +320,31 @@ def hypot(uvel_ds, vvel_ds):
     vel_ds = uvel_ds
     return vel_ds
 
+# https://matplotlib.org/stable/tutorials/colors/colors.html
+def color_by_k(k, kvel):
+    # return str(k*5/255.)
+    colors = "bgrcmykw"
+    color = 'w' if kvel == 0 else colors[int(k/7)]
+    return color
 
-def plot_tile(ecco_ds, tile, k, year, month, results):
-    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
-    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
+def plot_tile(ecco_ds, tile, kplot, year, month, results):
+    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=kplot)
+    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=kplot)
     tile_to_plot = hypot(uvel_ds, vvel_ds)
-    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
-    plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
+    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=kplot) !=0, np.nan)
+    plt.imshow(tile_to_plot, cmap='jet', origin='lower', vmin=-0.25, vmax=0.25);
     plt.colorbar()
+    plt.xlim([0,90])
+    plt.ylim([0,90])
+    plt.xlabel('x-dimension of u grid')
+    plt.ylabel('y-dimension of v grid')
+
     plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
-    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+    # results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
     for index, result in results_match.iterrows():
         logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.xoge, result.yoge, color='magenta')
+        plt.scatter(result.xoge, result.yoge, color=color_by_k(result.k, result.kvel))
     plt.tight_layout(pad=0)
 
 def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
@@ -314,6 +362,13 @@ def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
     # plt.show()
     return outfile
 
+def plot_tile_10(ecco_ds, k, year, month, results, outfile):
+    tile = 10
+    logging.info(f'k={k}, tile={tile}, {year}-{month}, {outfile}')
+    fig = plt.figure(figsize = (9,9))
+    plot_tile(ecco_ds, tile, k, year, month, results)
+    plt.savefig(outfile)
+    return outfile
 
 def plot_tiles_2_10(ecco_ds, k, year, month, results, outfile):
     fig = plt.figure(figsize=(12,6))
@@ -380,6 +435,7 @@ def gen_mp4(file_pattern, keep_png=False):
     cmd = f'ffmpeg -r 24 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
     run(cmd, shell=True)
     if not keep_png:
+        logging.info(f'rm {file_pattern}_*.png')
         run(f'rm {file_pattern}_*.png', shell=True)
     logging.info(f' Generated {file_pattern}.mp4')
 
@@ -396,7 +452,8 @@ def visualize(result_csv, k, years=[], months=[]):
         plot_months = months if months else range(12)
         for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
-            plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+            plot_tile_10(ecco_ds, k, year, month, results, outfile)
+            # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
             # plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
     
@@ -408,7 +465,7 @@ def compute(args):
     input_file = args.inputfile
     particles = read_input(input_file, args.tile, args.k)
 
-    results = [['particle', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel']]
+    results = [['particle', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel']]
     base_dir = configure_base_dir()
     for year in range(args.from_year, args.to_year):
         ecco_ds = load_ecco_ds(int(year), base_dir)

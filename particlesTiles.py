@@ -25,6 +25,12 @@ except Exception as e:
     print('Please add ECCOv4-py to System Environment PYTHONPATH!', file=sys.stderr)
     raise(e)
 
+particle_index = 0
+def next_particle_index():
+    global particle_index
+    index = particle_index
+    particle_index += 1
+    return index
 
 def configure_base_dir(base_dir=None):
     eccodata_dir = ''
@@ -214,10 +220,13 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
 def read_input(input_file, tile=10, k=0):
     locations = pd.read_csv(input_file)
     particles = []
-    for index, row in locations.iterrows():
-        particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
-        particle['tile'] = int(row['tile']) if 'tile' in row else tile
-        particle['k'] = float(row['k']) if 'k' in row else k
+    for i, row in locations.iterrows():
+        particle = {'index': next_particle_index(),
+                    'tile': int(row['tile']) if 'tile' in row else tile,
+                    'xoge': float(row['xoge']),
+                    'yoge': float(row['yoge']),
+                    'k': float(row['k']) if 'k' in row else k,
+                    'state': 'ok'}
         particles.append(particle)
     return particles
 
@@ -257,6 +266,9 @@ def refresh_particle(particle, results):
             particle['yoge'] = result[5]
             particle['k'] = result[6]
             return
+
+# def add_to_results(particle, results):
+#     results.append([particle['index'], year, month, tile, xoge, yoge, k, uvel, vvel, kvel])
 
 def particle_position(ecco_ds, particle, year, month, results, fudge=0):
     if particle['state'] == 'OutOfTile':

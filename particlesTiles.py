@@ -210,22 +210,15 @@ def move_1month(ecco_ds, tile, x0, y0, k0, uvel, vvel, kvel=1, fudge=0, retry=0)
 
     return (newtile, newx, newy, k)
 
-# if idx is specified, then only return that particle
-def read_input(input_file, tile, k=0, idx=-1):
-    with open(input_file) as csv_file:
-        csv_reader = csv.DictReader(csv_file, delimiter=',')
-        particles = []
-        index = 0
-        for row in csv_reader:
-            if idx >=0 and idx != index:
-                continue
-            particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
-            
-            particle['tile'] = int(row['tile']) if 'tile' in row else tile
-            particle['k'] = float(row['k']) if 'k' in row else k
 
-            particles.append(particle)
-            index += 1
+def read_input(input_file, tile=10, k=0):
+    locations = pd.read_csv(input_file)
+    particles = []
+    for index, row in locations.iterrows():
+        particle = {'index': index, 'xoge': int(row['xoge']), 'yoge': int(row['yoge']), 'state': 'ok'}
+        particle['tile'] = int(row['tile']) if 'tile' in row else tile
+        particle['k'] = float(row['k']) if 'k' in row else k
+        particles.append(particle)
     return particles
 
 

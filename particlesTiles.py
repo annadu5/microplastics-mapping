@@ -244,7 +244,7 @@ def adjustTile(tile, ix, jy):
             newtile, newi, newj = 12, ix-90, jy
         elif tile == 12: # undefined
             pass
-        elif tile == 10:
+        elif tile == 10: #=>11
             newtile, newi, newj = 11, ix-90, jy
     elif (ix < 0) and (jy < 0): # bottom left
         if tile == 0: #undefined
@@ -297,9 +297,9 @@ def adjustTile(tile, ix, jy):
         elif tile == 10: #=> 7
             newtile, newi, newj = 7, ix, 90+jy
         elif tile == 11: #=> 8
-            newtile, newi, newj = 7, ix, 90+jy
+            newtile, newi, newj = 8, ix, 90+jy
         elif tile == 12: #=> 9
-            newtile, newi, newj = 7, ix, 90+jy
+            newtile, newi, newj = 9, ix, 90+jy
     elif (ix >= 90) and (jy < 0): # bottom right
         if tile == 0: #undefined
             pass

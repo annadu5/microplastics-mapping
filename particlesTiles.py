@@ -374,10 +374,16 @@ def hypot(uvel_ds, vvel_ds):
     return vel_ds
 
 # https://matplotlib.org/stable/tutorials/colors/colors.html
-def color_by_k(k, kvel):
+def color_by_k(k):
     # return str(k*5/255.)
-    colors = "bgrcmykw"
-    color = 'w' if kvel == 0 else colors[int(k/7)]
+    # colors = "bgrcmykw"
+    # color = colors[int(k/7)]
+    kgrey = int(k * 256 / 50.0)
+    # blue --> red during sink
+    rr = format(kgrey, '02X')
+    gg = '00'
+    bb = format(255-kgrey, '02X')
+    color = f'#{rr}{gg}{bb}'
     return color
 
 def plot_tile(ecco_ds, tile, kplot, year, month, results):
@@ -397,7 +403,7 @@ def plot_tile(ecco_ds, tile, kplot, year, month, results):
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
     for index, result in results_match.iterrows():
         logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.xoge, result.yoge, color=color_by_k(result.k, result.kvel))
+        plt.scatter(result.xoge, result.yoge, c=color_by_k(result.k))
     plt.tight_layout(pad=0)
 
 def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):

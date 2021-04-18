@@ -76,8 +76,8 @@ def usage():
     # TODO k_base1, month_base1
     parser.add_argument('--kvel', type=float, default=0.25, help='average sinking speed (layer/month)')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
-    parser.add_argument('--to-year', type=int, default=2015, help='End year')
-    parser.add_argument('--fudge-pct', type=int, default=50, help='Percentage of factor to disturb')
+    parser.add_argument('--to-year', type=int, default=2017, help='End year')
+    parser.add_argument('--fudge-pct', type=int, default=30, help='Percentage of factor to disturb')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
@@ -638,16 +638,17 @@ def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     logging.info(f'{year}-{month}, {outfile}')
     fig = plt.figure(figsize=(30,30))
     uvel_ds = ecco_ds.UVEL.isel(time=month, k=0)
-    tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(k=0) !=0, np.nan)
+    tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(k=0) !=0)
     ecco.plot_proj_to_latlon_grid(ecco_ds.XC, ecco_ds.YC, tile_to_plot,
-                plot_type = 'pcolormesh', projection_type = 'robin',
+                plot_type = 'pcolormesh', projection_type = 'PlateCarree',
                 cmap='jet', dx=1, dy=1, show_colorbar=False,
                 cmin=-0.25, cmax=0.25)
 
     results_match = results[(results.year == year) & (results.month == month)]
+    print(year, month)
     for index, result in results_match.iterrows():
-        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
         lon, lat = lon_lat(ecco_ds, result.tile, result.xoge, result.yoge)
+        logging.debug(f' {result.tile},{int(result.xoge)},{int(result.yoge)} => ({lon},{lat})')
         plt.scatter(lon, lat, c=color_by_k(result.k))
 
     plt.savefig(outfile)
@@ -718,7 +719,7 @@ def compute(args):
     columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
     results = [columns]
     base_dir = configure_base_dir()
-    for year in range(args.from_year, args.to_year):
+    for year in range(args.from_year, args.to_year+1):
         ecco_ds = load_ecco_ds(int(year), base_dir)
         for month in range(12):
             for particle in particles:

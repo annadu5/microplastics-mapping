@@ -497,6 +497,25 @@ def find_initial_position(results, id):
     else:
         return None
 
+def find_random_in_tile(results, tile):
+    tile_initial_list = []
+    columns = results[0]
+    yearidx = columns.index('year')
+    monthidx = columns.index('month')
+    year = results[1][yearidx]
+    month = results[1][monthidx]
+
+    for result in results:
+        if (year == result[yearidx]) and (month == result[monthidx]):
+            tile_initial_list.append(result)
+
+    if tile_initial_list:
+        pick = int(len(tile_initial_list) * random.random())
+        return tile_initial_list[pick]
+    else:
+        return None
+
+
 def refresh_particle(particle, results):
     # Don't add new particles in later years
     if particle['year'] >= 2005:
@@ -507,7 +526,10 @@ def refresh_particle(particle, results):
     xogeidx = columns.index('xoge')
     yogeidx = columns.index('yoge')
 
-    result = find_initial_position(results, particle['id'])
+    # Add new particle from the beached particle's original location
+    # result = find_initial_position(results, particle['id'])
+    # Add new particle randomly from the tile
+    result = find_random_in_tile(results, particle['tile'])
     if result:
         new_particle = {
             'id': next_particle_id(),

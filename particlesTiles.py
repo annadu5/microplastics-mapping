@@ -29,7 +29,7 @@ except Exception as e:
 MPS_TO_DEG_PER_MONTH = (365.0/12) * 24 * 3600 / (40075017.0/360)
 
 # Sinking speed, assuming 1 layer per 100 days
-KVEL = 0.3
+KVEL = 0.25
 
 # index for next particle, TODO: concurrency
 particle_id = 0
@@ -242,6 +242,7 @@ def move_1month(ecco_ds, particle, fudge=0, retry=0):
     particle['xoge'], particle['yoge'], particle['k'] = newx, newy, k
 
 
+# default tile is 10, default k is 0
 def read_input(input_file, tile=10, k=0):
     locations = pd.read_csv(input_file)
     particles = []
@@ -426,8 +427,7 @@ def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
     # plt.show()
     return outfile
 
-def plot_tile_10(ecco_ds, k, year, month, results, outfile):
-    tile = 10
+def save_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     logging.info(f'k={k}, tile={tile}, {year}-{month}, {outfile}')
     fig = plt.figure(figsize = (9,9))
     plot_tile(ecco_ds, tile, k, year, month, results)
@@ -510,7 +510,7 @@ def gen_mp4(file_pattern, keep_png=False):
     logging.info(f' Generated {file_pattern}.mp4')
 
 
-def visualize(result_csv, k, years=[], months=[]):
+def visualize(result_csv, years=[], months=[]):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
     count = 0
@@ -522,7 +522,7 @@ def visualize(result_csv, k, years=[], months=[]):
         plot_months = months if months else range(12)
         for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
-            plot_tile_10(ecco_ds, k, year, month, results, outfile)
+            save_1tile(ecco_ds, year, month, results, outfile)
             # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
             # plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
@@ -533,7 +533,7 @@ def visualize(result_csv, k, years=[], months=[]):
 
 def compute(args):
     input_file = args.inputfile
-    particles = read_input(input_file, args.tile, args.k)
+    particles = read_input(input_file, args.tile)
 
     columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
     results = [columns]
@@ -556,7 +556,7 @@ def test(args):
     result_csv = args.inputfile
     results = pd.read_csv(result_csv)
     count = 0
-    k = args.k
+    k = 0
     tiles = [10, 2]
     fname, fext = os.path.splitext(result_csv)
     file_pattern = f'{fname}-k{k}'
@@ -577,7 +577,7 @@ def main(args):
         y,m = args.png_ym.split(':')
         years = [int(y)]
         months = [int(m)-1]
-    visualize(result_file, args.k, years=years, months=months)
+    visualize(result_file, years=years, months=months)
 
 
 if __name__ == '__main__':

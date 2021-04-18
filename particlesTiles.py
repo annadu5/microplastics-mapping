@@ -82,6 +82,10 @@ def usage():
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
     parser.add_argument('--png-ym', help='year:month')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--plot-1tile', type=int, default=10)
+    group.add_argument('--plot-all-tiles', action='store_true')
+    group.add_argument('--plot-globe', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -438,7 +442,7 @@ def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
     # plt.show()
     return outfile
 
-def save_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
+def plot_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     logging.info(f'k={k}, tile={tile}, {year}-{month}, {outfile}')
     fig = plt.figure(figsize = (9,9))
     plot_tile(ecco_ds, tile, k, year, month, results)
@@ -521,7 +525,7 @@ def gen_mp4(file_pattern, keep_png=False):
     logging.info(f' Generated {file_pattern}.mp4')
 
 
-def visualize(result_csv, years=[], months=[]):
+def visualize(args, result_csv, years=[], months=[]):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
     count = 0
@@ -533,7 +537,12 @@ def visualize(result_csv, years=[], months=[]):
         plot_months = months if months else range(12)
         for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
-            save_1tile(ecco_ds, year, month, results, outfile)
+            if args.plot_globe:
+                pass
+            elif args.plot_all_tiles:
+                pass
+            else:
+                plot_1tile(ecco_ds, year, month, results, outfile, tile=args.plot_1tile)
             # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
             # plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
@@ -591,7 +600,7 @@ def main(args):
         y,m = args.png_ym.split(':')
         years = [int(y)]
         months = [int(m)-1]
-    visualize(result_file, years=years, months=months)
+    visualize(args, result_file, years=years, months=months)
 
 
 if __name__ == '__main__':

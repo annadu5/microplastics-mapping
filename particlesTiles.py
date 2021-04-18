@@ -636,16 +636,16 @@ def lon_lat(ecco_ds, tile, i, j):
 
 def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     logging.info(f'{year}-{month}, {outfile}')
-    fig = plt.figure(figsize=(30,30))
+    fig = plt.figure(figsize=(30,15))
     uvel_ds = ecco_ds.UVEL.isel(time=month, k=0)
     tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(k=0) !=0)
     ecco.plot_proj_to_latlon_grid(ecco_ds.XC, ecco_ds.YC, tile_to_plot,
                 plot_type = 'pcolormesh', projection_type = 'PlateCarree',
-                cmap='jet', dx=1, dy=1, show_colorbar=False,
+                cmap='jet', dx=1, dy=1, show_colorbar=True,
                 cmin=-0.25, cmax=0.25)
+    plt.title(f"Anna Du ECCO UVEL {year}-{month+1}")
 
     results_match = results[(results.year == year) & (results.month == month)]
-    print(year, month)
     for index, result in results_match.iterrows():
         lon, lat = lon_lat(ecco_ds, result.tile, result.xoge, result.yoge)
         logging.debug(f' {result.tile},{int(result.xoge)},{int(result.yoge)} => ({lon},{lat})')

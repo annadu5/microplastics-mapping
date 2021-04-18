@@ -182,17 +182,21 @@ def disturb_exp(uvel, vvel, ix, jy, fudge):
     dy = yfactor * vvel * MPS_TO_DEG_PER_MONTH
     return dx, dy
 
-def disturb_simple(uvel, vvel, ix, jy, fudge):
+def disturb_simple(uvel, vvel, kvel, fudge):
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
+    kfactor = random.uniform(-1.0, 1.0) 
+    if fudge < 100.0:
+        kfactor *= float(fudge) / 100.0 
 
     dx = xfactor * uvel * MPS_TO_DEG_PER_MONTH
     dy = yfactor * vvel * MPS_TO_DEG_PER_MONTH
-    return dx, dy
+    dk = kfactor * kvel
+    return dx, dy, dk
 
-def disturb(uvel, vvel, ix, jy, fudge):
+def disturb(uvel, vvel, kvel, ix, jy, k, fudge):
     # return disturb_exp(uvel, vvel, ix, jy, fudge)
-    return disturb_simple(uvel, vvel, ix, jy, fudge)
+    return disturb_simple(uvel, vvel, kvel, fudge)
 
 def nudge(uvel, vvel):
     dx = random.uniform(-0.5, 0.5) if uvel else 0
@@ -218,8 +222,8 @@ def move_1month(ecco_ds, particle, fudge=0, retry=0):
         k = k0 + kvel
 
     # randomize the move
-    dx, dy = disturb(uvel, vvel, x, y, fudge)
-    newtile, newx, newy = tile, x+dx, y+dy
+    dx, dy, dk = disturb(uvel, vvel, kvel, x, y, k, fudge)
+    newtile, newx, newy, newk = tile, x+dx, y+dy, k+dk
     if outOfTile(newx, newy):
         newtile, newx, newy = adjustTile(tile, newx, newy)
 
@@ -238,7 +242,7 @@ def move_1month(ecco_ds, particle, fudge=0, retry=0):
             break
 
     particle['tile'] = newtile
-    particle['xoge'], particle['yoge'], particle['k'] = newx, newy, k
+    particle['xoge'], particle['yoge'], particle['k'] = newx, newy, newk
 
 
 # default tile is 10, default k is 0

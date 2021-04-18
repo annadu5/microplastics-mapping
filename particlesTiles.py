@@ -407,11 +407,11 @@ def color_by_k(k):
     color = f'#{rr}{gg}{bb}'
     return color
 
-def plot_tile(ecco_ds, tile, kplot, year, month, results):
+def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=kplot)
-    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=kplot)
-    tile_to_plot = hypot(uvel_ds, vvel_ds)
-    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=kplot) !=0, np.nan)
+    # vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=kplot)
+    # tile_to_plot = hypot(uvel_ds, vvel_ds)
+    tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(tile=tile,k=kplot) !=0, np.nan)
     plt.imshow(tile_to_plot, cmap='jet', origin='lower', vmin=-0.25, vmax=0.25);
     plt.colorbar()
     plt.xlim([0,90])
@@ -427,17 +427,15 @@ def plot_tile(ecco_ds, tile, kplot, year, month, results):
         plt.scatter(result.xoge, result.yoge, c=color_by_k(result.k))
     plt.tight_layout(pad=0)
 
-def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
-    logging.info(f'k={k}, tiles={tiles}, {year}-{month}, {outfile}')
-    fig = plt.figure(figsize=(12,12))
+def plot_all_tiles(ecco_ds, year, month, results, outfile, k=0):
+    logging.info(f'k={k}, tiles=all, {year}-{month}, {outfile}')
+    tiles = range(13)
+    fig = plt.figure(figsize=(30,30))
     plt.title(f'{year}-{month+1}')
+    grid5x5 = {0:21, 1:16, 2:11, 3:22, 4:17, 5:12, 6:7, 7:8, 8:9, 9:10, 10:3, 11:4, 12:5}
     for tile in tiles:
-        if tile == 10:
-            fig = plt.subplot(222)
-            plot_tile(ecco_ds, tile, k, year, month, results)
-        elif tile == 2:
-            fig = plt.subplot(223)
-            plot_tile(ecco_ds, tile, k, year, month, results)
+        fig = plt.subplot(5,5,grid5x5[tile])
+        plot_tile(ecco_ds, tile, year, month, results, kplot=k)
     plt.savefig(outfile)
     # plt.show()
     return outfile
@@ -445,54 +443,19 @@ def plot_tiles(ecco_ds, tiles, k, year, month, results, outfile):
 def plot_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     logging.info(f'k={k}, tile={tile}, {year}-{month}, {outfile}')
     fig = plt.figure(figsize = (9,9))
-    plot_tile(ecco_ds, tile, k, year, month, results)
+    plot_tile(ecco_ds, tile, year, month, results, kplot=k)
     plt.savefig(outfile)
     return outfile
 
-def plot_tiles_2_10(ecco_ds, k, year, month, results, outfile):
-    fig = plt.figure(figsize=(12,6))
 
-    # tile 2
-    tile = 2
-    fig = plt.subplot(122)
-    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
-    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
-    tile_to_plot = hypot(uvel_ds, vvel_ds)
-    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
-    plt.imshow(tile_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
-    plt.colorbar()
-    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
-    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
-    for index, result in results_match.iterrows():
-        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.xoge, result.yoge, color='magenta')
-    plt.tight_layout(pad=0)
-
-    # tile 10
-    tile = 10
-    fig = plt.subplot(121)
-    uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=k)
-    vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=k)
-    tile_to_plot = hypot(uvel_ds, vvel_ds)
-    tile_to_plot = tile_to_plot.where(ecco_ds.hFacW.isel(tile=tile,k=k) !=0, np.nan)
-    arr_to_plot = tile_to_plot
-    # arr_to_plot = np.swapaxes(tile_to_plot.values, 0, 1)
-    # arr_to_plot = tile_to_plot.copy()
-    # # This has a lot of computation
-    # for i in range(90):
-    #     for j in range(90):
-    #         arr_to_plot[i][j] = tile_to_plot[j][89-i]
-    plt.imshow(arr_to_plot, origin='lower', vmin=-0.25, vmax=0.25);
-    plt.colorbar()
-    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
-    results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
-    for index, result in results_match.iterrows():
-        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.yoge, 89-result.xoge, color='magenta')
-    plt.tight_layout(pad=0)
-
+def plot_globe(ecco_ds, year, month, results, outfile):
+    logging.info(f'{year}-{month}, {outfile}')
+    fig = plt.figure(figsize=(30,30))
+    uvel_ds = ecco_ds.UVEL.isel(time=month, k=0)
+    tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(k=0) !=0, np.nan)
+    ecco.plot_proj_to_latlon_grid(ecco_ds.XC, ecco_ds.YC, tile_to_plot,
+                plot_type = 'pcolormesh', projection_type = 'robin')
     plt.savefig(outfile)
-    # plt.show()
     return outfile
 
 
@@ -538,13 +501,12 @@ def visualize(args, result_csv, years=[], months=[]):
         for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
             if args.plot_globe:
-                pass
+                plot_globe(ecco_ds, year, month, results, outfile)
             elif args.plot_all_tiles:
-                pass
+                # TODO: ecco.plot_tiles
+                plot_all_tiles(ecco_ds, year, month, results, outfile, k=0)
             else:
                 plot_1tile(ecco_ds, year, month, results, outfile, tile=args.plot_1tile)
-            # plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
-            # plot_tiles_2_10(ecco_ds, k, year, month, results, outfile)
             count += 1
     
     if not (years and months):
@@ -586,7 +548,7 @@ def test(args):
     year, month = 2005, 10
     ecco_ds = load_ecco_ds(int(year), base_dir)
     outfile = f'{file_pattern}_{count:03}.png'
-    plot_tiles(ecco_ds, tiles, k, year, month, results, outfile)
+    plot_all_tiles(ecco_ds, year, month, results, outfile, k=0)
 
 
 def main(args):

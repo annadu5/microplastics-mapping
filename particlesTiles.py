@@ -28,7 +28,7 @@ except Exception as e:
 # convert velocity from meter/second to degree/month
 MPS_TO_DEG_PER_MONTH = (365.0/12) * 24 * 3600 / (40075017.0/360)
 
-# Sinking speed, assuming 1 layer per 100 days
+# Average sinking speed, assuming 4 months per layer
 KVEL = 0.25
 
 # index for next particle, TODO: concurrency
@@ -74,8 +74,7 @@ def usage():
     parser = argparse.ArgumentParser(description='Compute particle movements within one tile')
     parser.add_argument('inputfile')
     # TODO k_base1, month_base1
-    parser.add_argument('-k', '--k', type=int, default=0, help='k layer')
-    parser.add_argument('--tile', type=int, default=10, help='tile number [0,12]')
+    parser.add_argument('--kvel', type=float, default=0.25, help='average sinking speed (layer/month)')
     parser.add_argument('--from-year', type=int, default=1992, help='Starting year')
     parser.add_argument('--to-year', type=int, default=2015, help='End year')
     parser.add_argument('--fudge-pct', type=int, default=50, help='Percentage of factor to disturb')
@@ -533,7 +532,10 @@ def visualize(result_csv, years=[], months=[]):
 
 def compute(args):
     input_file = args.inputfile
-    particles = read_input(input_file, args.tile)
+    particles = read_input(input_file)
+
+    global KVEL
+    KVEL = args.kvel
 
     columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
     results = [columns]
@@ -547,7 +549,7 @@ def compute(args):
                 new_particle = particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
                 if new_particle:
                     particles.append(new_particle)
-    extra_info = f'f{args.fudge_pct}'
+    extra_info = f'f{args.fudge_pct}kv{args.kvel}'
     result_file = write_results(input_file, results, extra=extra_info)
     return result_file
 

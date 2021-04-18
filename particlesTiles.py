@@ -299,12 +299,15 @@ def update_velocities(ecco_ds, particle):
     particle['kvel'] = KVEL
 
 def refresh_particle(particle, results):
+    # Don't add new particles in later years
+    if particle['year'] >= 2005:
+        return None
+
     columns = results[0]
     idx = columns.index('id')
     tileidx = columns.index('tile')
     xogeidx = columns.index('xoge')
     yogeidx = columns.index('yoge')
-    kidx = columns.index('k')
 
     # assuming results is an ordered list, so the first matching index is original position
     for result in results:
@@ -314,10 +317,12 @@ def refresh_particle(particle, results):
                 'tile': result[tileidx],
                 'xoge': result[xogeidx],
                 'yoge': result[yogeidx],
-                'k': result[kidx],
+                'k': 0,
                 'state': ''
             }
-            logging.info(f"New {new_particle['id']}<={particle['id']}")
+            logging.info(f" {particle['year']}/{particle['month']}"
+                         f" Refresh {particle['id']}=>{new_particle['id']}"
+                         f" {result[tileidx]}:({result[xogeidx]},{result[yogeidx]})")
             return new_particle
     else: # beached from beginning, or something wrong
         return None
@@ -338,11 +343,11 @@ def particle_position(ecco_ds, particle, results, fudge=0):
 
     # Ignore out-of-tile ones -- only limited tiles are processed
     if outOfTile(particle['xoge'], particle['yoge']):
-        logging.info("    particle is out of tile")
+        logging.info(f"    particle {particle['id']} is out of tile")
         particle['state'] = 'OutOfTile'
         return new_particle
 
-    # If beached then refresh particle. TODO: create new particle
+    # If beached then refresh particle.
     if beached(ecco_ds, particle):
         if particle['state'] != 'Beached':
             new_particle = refresh_particle(particle, results)
@@ -352,7 +357,7 @@ def particle_position(ecco_ds, particle, results, fudge=0):
 
     update_velocities(ecco_ds, particle)
 
-    logging.info(f' {particle}')
+    logging.debug(f' {particle}')
 
     # everything is up-to-date, save it
     add_to_results(particle, results)
@@ -379,7 +384,7 @@ def color_by_k(k):
     # colors = "bgrcmykw"
     # color = colors[int(k/7)]
     kgrey = int(k * 256 / 50.0)
-    # blue --> red during sink
+    # blue --> red during sinkg
     rr = format(kgrey, '02X')
     gg = '00'
     bb = format(255-kgrey, '02X')

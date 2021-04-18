@@ -31,12 +31,12 @@ MPS_TO_DEG_PER_MONTH = (365.0/12) * 24 * 3600 / (40075017.0/360)
 # Sinking speed, assuming 1 layer per 100 days
 KVEL = 0.3
 
-# index for next particle
-particle_index = 0
-def next_particle_index():
-    global particle_index
-    index = particle_index
-    particle_index += 1
+# index for next particle, TODO: concurrency
+particle_id = 0
+def next_particle_id():
+    global particle_id
+    index = particle_id
+    particle_id += 1
     return index
 
 def configure_base_dir(base_dir=None):
@@ -246,7 +246,7 @@ def read_input(input_file, tile=10, k=0):
     locations = pd.read_csv(input_file)
     particles = []
     for i, row in locations.iterrows():
-        particle = {'index': next_particle_index(),
+        particle = {'id': next_particle_id(),
                     'tile': int(row['tile']) if 'tile' in row else tile,
                     'xoge': float(row['xoge']),
                     'yoge': float(row['yoge']),
@@ -279,28 +279,48 @@ def write_results(input_file, results, extra=''):
 
 
 def update_velocities(ecco_ds, particle):
-    month = particle['month']
-    tile = particle['tile']
-    ix = int(particle['xoge'])
-    jy = int(particle['yoge'])
-    k = int(particle['k'])
+    if beached(ecco_ds, particle):
+        particle['uvel'] = particle['vvel'] = particle['kvel'] = 0.
+        return
     # uvel = ecco_ds.UVEL.values[month,int(k), tile,int(yoge),int(xoge)]
     # vvel = ecco_ds.VVEL.values[month,int(k), tile,int(yoge),int(xoge)]
-    particle['uvel'] = float(ecco_ds.UVEL.isel(time=month, k=k, j=jy, i_g=ix, tile=tile).values)
-    particle['vvel'] = float(ecco_ds.VVEL.isel(time=month, k=k, j_g=jy, i=ix, tile=tile).values)
+    particle['uvel'] = float(ecco_ds.UVEL.isel(time=particle['month'],
+                                               k=int(particle['k']),
+                                               j=int(particle['yoge']),
+                                               i_g=int(particle['xoge']),
+                                               tile=particle['tile']
+                                              ).values)
+    particle['vvel'] = float(ecco_ds.VVEL.isel(time=particle['month'],
+                                               k=int(particle['k']),
+                                               j_g=int(particle['yoge']),
+                                               i=int(particle['xoge']),
+                                               tile=particle['tile']
+                                              ).values)
     particle['kvel'] = KVEL
-    if beached(ecco_ds, tile, ix, jy, k):
-        particle['kvel'] = 0
 
 def refresh_particle(particle, results):
-    # assuming an ordered list
+    columns = results[0]
+    idx = columns.index('id')
+    tileidx = columns.index('tile')
+    xogeidx = columns.index('xoge')
+    yogeidx = columns.index('yoge')
+    kidx = columns.index('k')
+
+    # assuming results is an ordered list, so the first matching index is original position
     for result in results:
-        if result[0] == particle['index'] and result[1] == 1992 and result[2] == 0:
-            particle['tile'] = result[3]
-            particle['xoge'] = result[4]
-            particle['yoge'] = result[5]
-            particle['k'] = result[6]
-            return
+        if result[idx] == particle['id']:
+            new_particle = {
+                'id': next_particle_id(),
+                'tile': result[tileidx],
+                'xoge': result[xogeidx],
+                'yoge': result[yogeidx],
+                'k': result[kidx],
+                'state': ''
+            }
+            logging.info(f"New {new_particle['id']}<={particle['id']}")
+            return new_particle
+    else: # beached from beginning, or something wrong
+        return None
 
 def add_to_results(particle, results):
     result = []
@@ -314,25 +334,24 @@ def particle_position(ecco_ds, particle, results, fudge=0):
     # on positions, i.e. index, tile, xoge, yoge, k, and year, month,
     # but vels (uvel, vvel, kvel) need refreshing
 
+    new_particle = None
+
     # Ignore out-of-tile ones -- only limited tiles are processed
     if outOfTile(particle['xoge'], particle['yoge']):
         logging.info("    particle is out of tile")
         particle['state'] = 'OutOfTile'
-        return False
+        return new_particle
 
     # If beached then refresh particle. TODO: create new particle
     if beached(ecco_ds, particle):
+        if particle['state'] != 'Beached':
+            new_particle = refresh_particle(particle, results)
         particle['state'] = 'Beached'
-        refresh_particle(particle, results)
+    else:
+        particle['state'] = 'OK'
 
     update_velocities(ecco_ds, particle)
 
-    particle['state'] = 'OK'
-    # logging.info(f" {particle['year']}/{particle['month']}" \
-    #     f" PARTICLE {particle['index']} tile {particle['tile']}" \
-    #     f" @ ({particle['xoge']}, {particle['yoge']}, {particle['k']})" \
-    #     f" vel=({particle['uvel']}, {particle['vvel']}, {particle['kvel']})"
-    # )
     logging.info(f' {particle}')
 
     # everything is up-to-date, save it
@@ -341,7 +360,7 @@ def particle_position(ecco_ds, particle, results, fudge=0):
     # move to next month's position(tile, x,y,k) based on pos and vel this month
     move_1month(ecco_ds, particle, fudge=fudge, retry=0)
 
-    return True
+    return new_particle
 
 
 def hypot(uvel_ds, vvel_ds):
@@ -505,7 +524,7 @@ def compute(args):
     input_file = args.inputfile
     particles = read_input(input_file, args.tile, args.k)
 
-    columns = ['index', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
+    columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
     results = [columns]
     base_dir = configure_base_dir()
     for year in range(args.from_year, args.to_year):
@@ -514,7 +533,9 @@ def compute(args):
             for particle in particles:
                 particle['year'] = year
                 particle['month'] = month
-                particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
+                new_particle = particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
+                if new_particle:
+                    particles.append(new_particle)
     extra_info = f'f{args.fudge_pct}'
     result_file = write_results(input_file, results, extra=extra_info)
     return result_file

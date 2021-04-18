@@ -84,8 +84,8 @@ def usage():
     parser.add_argument('--png-ym', help='year:month')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--plot-1tile', type=int, default=10)
-    group.add_argument('--plot-all-tiles', action='store_true')
-    group.add_argument('--plot-globe', action='store_true')
+    group.add_argument('--plot-all-tiles', action='store_true', help='Plot all tiles by tiles')
+    group.add_argument('--plot-all-lonlat', action='store_true', help='Plot all tiles by lon-lat')
     args = parser.parse_args()
     return args
 
@@ -106,42 +106,223 @@ def outOfTile(x,y):
 def adjustTile(tile, ix, jy):
     newtile, newi, newj = tile, ix, jy
     if (ix < 0) and (jy >= 90): # top left
-        pass
+        if tile == 0: #=> 11
+            newtile, newi, newj = 11, 180-jy, ix+90
+        elif tile == 1: #=>10
+            newtile, newi, newj = 10, 180-jy, ix+90
+        elif tile == 2: #undefined
+            pass
+        elif tile == 3: #=>1
+            newtile, newi, newj = 1, ix+90, jy-90
+        elif tile == 4: #=>2
+            newtile, newi, newj = 2, ix+90, jy-90
+        elif tile == 5: # undefined
+            pass
+        elif tile == 6: # undefined
+            pass
+        elif tile == 7: #undefined
+            pass
+        elif tile == 8: #=>10
+            newtile, newi, newj = 10, ix+90, jy-90
+        elif tile == 9: #=>11
+            newtile, newi, newj = 11, ix+90, jy-90
+        elif tile == 10: #undefined
+            pass
+        elif tile == 11: #=>2
+            newtile, newi, newj = 2, jy-90, -ix
+        elif tile == 12: #=>1
+            newtile, newi, newj = 1, jy-90, -ix
     elif (0 <= ix < 90) and (jy >= 90): # top
-        if tile == 2:
+        if tile == 0: #=> 1
+            newtile, newi, newj = (1, ix, jy-90)
+        elif tile == 1: #=> 2
+            newtile, newi, newj = (2, ix, jy-90)
+        elif tile == 2: #=> 6
             newtile, newi, newj = (6, jy-90, 90-ix)
-        elif tile == 10:
+        elif tile == 3: #=> 4
+            newtile, newi, newj = (4, ix, jy-90)
+        elif tile == 4: #=> 5
+            newtile, newi, newj = (5, ix, jy-90)
+        elif tile == 5: #=> 6
+            newtile, newi, newj = (6, ix, jy-90)
+        elif tile == 6: #=> 10
+            newtile, newi, newj = (10, jy-90, 90-ix)
+        elif tile == 7: #=> 10
+            newtile, newi, newj = (10, ix, jy-90)
+        elif tile == 8: #=> 11
+            newtile, newi, newj = (11, ix, jy-90)
+        elif tile == 9: #=> 12
+            newtile, newi, newj = (12, ix, jy-90)
+        elif tile == 10: #=> 2
             newtile, newi, newj = 2, jy-90, 90-ix
+        elif tile == 11: #=> 1
+            newtile, newi, newj = 1, jy-90, 90-ix
+        elif tile == 12: #=> 0
+            newtile, newi, newj = 0, jy-90, 90-ix
     elif (ix >= 90) and (jy >= 90): # top right
-        if tile == 2:
-            pass # undefineable
-        elif tile == 10:
+        if tile == 0: #=>4
+            newtile, newi, newj = 4, ix-90, jy-90
+        elif tile == 1: #=>5
+            newtile, newi, newj = 5, ix-90, jy-90
+        elif tile == 2: # undefineable
+            pass
+        elif tile == 3: #=>8
+            newtile, newi, newj = 8, 180-jy, ix-90
+        elif tile == 4: #=>7
+            newtile, newi, newj = 7, 180-jy, ix-90
+        elif tile == 5: # undefineable
+            pass
+        elif tile == 6: # undefineable
+            pass
+        elif tile == 7: #=>11
+            newtile, newi, newj = 11, ix-90, jy-90
+        elif tile == 8: #=>12
+            newtile, newi, newj = 12, ix-90, jy-90
+        elif tile == 9: # undefineable
+            pass
+        elif tile == 10: #=>1
             newtile, newi, newj = 1, jy-90, 180-ix
+        elif tile == 11: #=>0
+            newtile, newi, newj = 0, jy-90, 180-ix
+        elif tile == 12: # undefineable
+            pass
     elif (ix < 0) and (0 <= jy < 90): # left
-        if tile == 2:
+        if tile == 0: #=>12
+            newtile, newi, newj = 12, 90-jy, 90+ix
+        elif tile == 1: #=>11
+            newtile, newi, newj = 11, 90-jy, 90+ix
+        elif tile == 2: #=> 10
             newtile, newi, newj = 10, 90-jy, 90+ix
-        elif tile == 10:
+        elif tile == 3: #=> 0
+            newtile, newi, newj = 0, 90+ix, jy
+        elif tile == 4: #=> 1
+            newtile, newi, newj = 1, 90+ix, jy
+        elif tile == 5: #=> 2
+            newtile, newi, newj = 2, 90+ix, jy
+        elif tile == 6: #=>2
+            newtile, newi, newj = 2, 90-jy, 90+ix
+        elif tile == 7: #=> 6
+            newtile, newi, newj = 6, 90+ix, jy
+        elif tile == 8: #=> 7
+            newtile, newi, newj = 7, 90+ix, jy
+        elif tile == 9: #=> 8
+            newtile, newi, newj = 8, 90+ix, jy
+        elif tile == 10: #=>6
             newtile, newi, newj = 6, 90-jy, 90+ix
+        elif tile == 11: #=> 10
+            newtile, newi, newj = 10, 90+ix, jy
+        elif tile == 12: #=> 11
+            newtile, newi, newj = 11, 90+ix, jy
     elif (ix >= 90) and (0 <= jy < 90): # right
-        if tile == 2:
+        if tile == 0: #=>3
+            newtile, newi, newj = 3, ix-90, jy
+        elif tile == 1: #=>4
+            newtile, newi, newj = 4, ix-90, jy
+        elif tile == 2: #=> 5
             newtile, newi, newj = 5, ix-90, jy
+        elif tile == 3: #=>9
+            newtile, newi, newj = 9, 90-jy, ix-90
+        elif tile == 4: #=>8
+            newtile, newi, newj = 8, 90-jy, ix-90
+        elif tile == 5: #=>7
+            newtile, newi, newj = 7, 90-jy, ix-90
+        elif tile == 6: #=> 7
+            newtile, newi, newj = 7, ix-90, jy
+        elif tile == 7: #=> 8
+            newtile, newi, newj = 8, ix-90, jy
+        elif tile == 8: #=> 9
+            newtile, newi, newj = 9, ix-90, jy
+        elif tile == 9: # undefined
+            pass
+        elif tile == 10: #=> 11
+            newtile, newi, newj = 11, ix-90, jy
+        elif tile == 11: #=> 12
+            newtile, newi, newj = 12, ix-90, jy
+        elif tile == 12: # undefined
+            pass
         elif tile == 10:
             newtile, newi, newj = 11, ix-90, jy
     elif (ix < 0) and (jy < 0): # bottom left
-        if tile == 2:
+        if tile == 0: #undefined
+            pass
+        elif tile == 1: #=> 12
+            newtile, newi, newj = 12, -jy, 90+ix
+        elif tile == 2: #=> 11
             newtile, newi, newj = 11, -jy, 90+ix
-        elif tile == 10:
-            newtile, newi, newj = 6, 90+ix, 90+jy # also ambuguous
+        elif tile == 3: #undefined
+            pass
+        elif tile == 4: #=>0
+            newtile, newi, newj = 0, 90+ix, 90+jy
+        elif tile == 5: #=>1
+            newtile, newi, newj = 1, 90+ix, 90+jy
+        elif tile == 6: #undefined
+            pass
+        elif tile == 7: #=>5 amb
+            newtile, newi, newj = 5, 90+ix, 90+jy
+        elif tile == 8: #=>5
+            newtile, newi, newj = 5, 90+jy, -ix
+        elif tile == 9: #=>4
+            newtile, newi, newj = 4, 90+jy, -ix
+        elif tile == 10: # ambiguous
+            newtile, newi, newj = 6, 90+ix, 90+jy
+        elif tile == 11: #=>7
+            newtile, newi, newj = 7, 90+ix, 90+jy
+        elif tile == 12: #=>8
+            newtile, newi, newj = 8, 90+ix, 90+jy
     elif (0 <= ix < 90) and (jy < 0): # bottom
-        if tile == 2:
+        if tile == 0: # undefined
+            pass
+        elif tile == 1: #=> 0
+            newtile, newi, newj = 0, ix, 90+jy
+        elif tile == 2: #=> 1
             newtile, newi, newj = 1, ix, 90+jy
-        elif tile == 10:
+        elif tile == 3: # undefined
+            pass
+        elif tile == 4: #=> 3
+            newtile, newi, newj = 3, ix, 90+jy
+        elif tile == 5: #=> 4
+            newtile, newi, newj = 4, ix, 90+jy
+        elif tile == 6: #=> 5
+            newtile, newi, newj = 5, ix, 90+jy
+        elif tile == 7: #=> 5
+            newtile, newi, newj = 5, jy+90, 90-ix
+        elif tile == 8: #=> 4
+            newtile, newi, newj = 4, jy+90, 90-ix
+        elif tile == 9: #=> 3
+            newtile, newi, newj = 3, jy+90, 90-ix
+        elif tile == 10: #=> 7
+            newtile, newi, newj = 7, ix, 90+jy
+        elif tile == 11: #=> 8
+            newtile, newi, newj = 7, ix, 90+jy
+        elif tile == 12: #=> 9
             newtile, newi, newj = 7, ix, 90+jy
     elif (ix >= 90) and (jy < 0): # bottom right
-        if tile == 2:
+        if tile == 0: #undefined
+            pass
+        elif tile == 1: #=>3
+            newtile, newi, newj = 3, ix-90, 90+jy
+        elif tile == 2:
             newtile, newi, newj = 4, ix-90, 90+jy
-        elif tile == 10:
+        elif tile == 3: #undefined
+            pass
+        elif tile == 4: #=>9
+            newtile, newi, newj = 9, -jy, ix-90
+        elif tile == 5: #=>8
+            newtile, newi, newj = 8, -jy, ix-90
+        elif tile == 6: #undefined
+            pass
+        elif tile == 7: #=>4
+            newtile, newi, newj = 4, jy+90, 180-ix
+        elif tile == 8: #=>3
+            newtile, newi, newj = 3, jy+90, 180-ix
+        elif tile == 9: #undefined
+            pass
+        elif tile == 10: #=>8
             newtile, newi, newj = 8, ix-90, 90+jy
+        elif tile == 11: #=>9
+            newtile, newi, newj = 9, ix-90, 90+jy
+        elif tile == 12: #undefined
+            pass
     else: # within the tile
         pass
     return newtile, newi, newj
@@ -418,9 +599,8 @@ def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     plt.ylim([0,90])
     plt.xlabel('x-dimension of u grid')
     plt.ylabel('y-dimension of v grid')
-
     plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
-    # results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile) & (results.k == k)]
+
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
     for index, result in results_match.iterrows():
         logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
@@ -448,13 +628,28 @@ def plot_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     return outfile
 
 
-def plot_globe(ecco_ds, year, month, results, outfile):
+def lon_lat(ecco_ds, tile, i, j):
+    lon = float(ecco_ds.XC.isel(tile=tile, j=int(j), i=int(i)).values)
+    lat = float(ecco_ds.YC.isel(tile=tile, j=int(j), i=int(i)).values)
+    return lon, lat
+
+
+def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     logging.info(f'{year}-{month}, {outfile}')
     fig = plt.figure(figsize=(30,30))
     uvel_ds = ecco_ds.UVEL.isel(time=month, k=0)
     tile_to_plot = uvel_ds.where(ecco_ds.hFacW.isel(k=0) !=0, np.nan)
     ecco.plot_proj_to_latlon_grid(ecco_ds.XC, ecco_ds.YC, tile_to_plot,
-                plot_type = 'pcolormesh', projection_type = 'robin')
+                plot_type = 'pcolormesh', projection_type = 'robin',
+                cmap='jet', dx=1, dy=1, show_colorbar=False,
+                cmin=-0.25, cmax=0.25)
+
+    results_match = results[(results.year == year) & (results.month == month)]
+    for index, result in results_match.iterrows():
+        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
+        lon, lat = lon_lat(ecco_ds, result.tile, result.xoge, result.yoge)
+        plt.scatter(lon, lat, c=color_by_k(result.k))
+
     plt.savefig(outfile)
     return outfile
 
@@ -500,8 +695,8 @@ def visualize(args, result_csv, years=[], months=[]):
         plot_months = months if months else range(12)
         for month in np.sort(plot_months):
             outfile = f'{file_pattern}_{count:03}.png'
-            if args.plot_globe:
-                plot_globe(ecco_ds, year, month, results, outfile)
+            if args.plot_all_lonlat:
+                plot_all_lonlat(ecco_ds, year, month, results, outfile)
             elif args.plot_all_tiles:
                 # TODO: ecco.plot_tiles
                 plot_all_tiles(ecco_ds, year, month, results, outfile, k=0)

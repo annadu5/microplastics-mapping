@@ -302,32 +302,40 @@ def update_velocities(ecco_ds, particle):
                                               ).values)
     particle['kvel'] = KVEL
 
+def find_initial_position(results, id):
+    columns = results[0]
+    idx = columns.index('id')
+    # assuming results is an ordered list, so the first matching index is original position
+    for result in results:
+        if result[idx] == id:
+            return result
+    else:
+        return None
+
 def refresh_particle(particle, results):
     # Don't add new particles in later years
     if particle['year'] >= 2005:
         return None
 
     columns = results[0]
-    idx = columns.index('id')
     tileidx = columns.index('tile')
     xogeidx = columns.index('xoge')
     yogeidx = columns.index('yoge')
 
-    # assuming results is an ordered list, so the first matching index is original position
-    for result in results:
-        if result[idx] == particle['id']:
-            new_particle = {
-                'id': next_particle_id(),
-                'tile': result[tileidx],
-                'xoge': result[xogeidx],
-                'yoge': result[yogeidx],
-                'k': 0,
-                'state': ''
-            }
-            logging.info(f" {particle['year']}/{particle['month']}"
-                         f" Refresh {particle['id']}=>{new_particle['id']}"
-                         f" {result[tileidx]}:({result[xogeidx]},{result[yogeidx]})")
-            return new_particle
+    result = find_initial_position(results, particle['id'])
+    if result:
+        new_particle = {
+            'id': next_particle_id(),
+            'tile': result[tileidx],
+            'xoge': result[xogeidx],
+            'yoge': result[yogeidx],
+            'k': 0,
+            'state': ''
+        }
+        logging.info(f" {particle['year']}/{particle['month']}"
+                        f" Refresh {particle['id']}=>{new_particle['id']}"
+                        f" {result[tileidx]}:({result[xogeidx]},{result[yogeidx]})")
+        return new_particle
     else: # beached from beginning, or something wrong
         return None
 

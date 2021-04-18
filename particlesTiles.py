@@ -82,10 +82,14 @@ def usage():
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
     parser.add_argument('--png-ym', help='year:month')
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('--plot-1tile', type=int, default=10)
-    group.add_argument('--plot-all-tiles', action='store_true', help='Plot all tiles by tiles')
-    group.add_argument('--plot-all-lonlat', action='store_true', help='Plot all tiles by lon-lat')
+    plot_group = parser.add_mutually_exclusive_group()
+    plot_group.add_argument('--plot-1tile', type=int, default=10)
+    plot_group.add_argument('--plot-all-tiles', action='store_true', help='Plot all tiles by tiles')
+    plot_group.add_argument('--plot-all-lonlat', action='store_true', help='Plot all tiles by lon-lat')
+    refresh_group = parser.add_mutually_exclusive_group()
+    refresh_group.add_argument('--no-refresh', action='store_true', help='No new particle is added')
+    refresh_group.add_argument('--refresh-random', action='store_true', help='Refresh random within the tile')
+    refresh_group.add_argument('--refresh-original', action='store_true', help='Refresh from original particle')
     args = parser.parse_args()
     return args
 
@@ -301,7 +305,7 @@ def adjustTile(tile, ix, jy):
             pass
         elif tile == 1: #=>3
             newtile, newi, newj = 3, ix-90, 90+jy
-        elif tile == 2:
+        elif tile == 2: #=>4
             newtile, newi, newj = 4, ix-90, 90+jy
         elif tile == 3: #undefined
             pass
@@ -526,10 +530,18 @@ def refresh_particle(particle, results):
     xogeidx = columns.index('xoge')
     yogeidx = columns.index('yoge')
 
-    # Add new particle from the beached particle's original location
-    # result = find_initial_position(results, particle['id'])
-    # Add new particle randomly from the tile
-    result = find_random_in_tile(results, particle['tile'])
+    if args.no_refresh:
+        return None
+    elif args.refresh_original:
+        # Add new particle from the beached particle's original location
+        result = find_initial_position(results, particle['id'])
+    elif args.refresh_random:
+        # Add new particle randomly from the tile
+        result = find_random_in_tile(results, particle['tile'])
+    else:
+        # By default, use random
+        result = find_random_in_tile(results, particle['tile'])
+
     if result:
         new_particle = {
             'id': next_particle_id(),
@@ -541,7 +553,7 @@ def refresh_particle(particle, results):
         }
         logging.info(f" {particle['year']}/{particle['month']}"
                         f" Refresh {particle['id']}=>{new_particle['id']}"
-                        f" {result[tileidx]}:({result[xogeidx]},{result[yogeidx]})")
+                        f" {result[tileidx]}:{result[xogeidx]},{result[yogeidx]}")
         return new_particle
     else: # beached from beginning, or something wrong
         return None

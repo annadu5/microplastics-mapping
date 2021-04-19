@@ -351,6 +351,9 @@ def beached(ecco_ds, tile_or_particle, xoge=None, yoge=None, k=None):
         yoge = tile_or_particle['yoge']
         k = tile_or_particle['k']
 
+    if outOfTile(xoge, yoge):
+        return False
+
     hfacw = get_hfacw(ecco_ds, tile, xoge, yoge, k)
     return int(hfacw) == 0
 
@@ -444,7 +447,7 @@ def read_input(input_file, tile=10, k=0):
                     'xoge': float(row['xoge']),
                     'yoge': float(row['yoge']),
                     'k': float(row['k']) if 'k' in row else k,
-                    'state': ''
+                    'state': 'New'
                    }
         particles.append(particle)
     return particles
@@ -471,6 +474,55 @@ def write_results(input_file, results, extra=''):
     return output_path
 
 
+# velocity on k is influences by various factors
+def update_kvel(ecco_ds, particle):
+    k = particle['k']
+
+    # start from KVEL
+    kv = KVEL
+
+    # k represents different depth
+    # https://grace.jpl.nasa.gov/data/get-data/ocean-bottom-pressure/
+    # There are 46 vertical levels with layer thickness of 10 m in the upper 150 m and 21 layers above 300 m.
+    if k < 15:
+        pass
+    elif 15 <= k < 21:
+        kv /= (1 + (k-15) * 0.6)
+    elif 21 <= k < 46:
+        # assuming avg ocean floor of 3700m, so each k increase 8m
+        kv /= (4 + (k-21) * 0.8)
+    elif 46 <= k < 50:
+        kv /= 150.
+
+    # biological accumulation areas gain density, see MBARI and modis map
+    # k layer: 2-11, primarily whenever it passes k=6, 80% gain 20% mass
+    lat = float(ecco_ds.YC.isel(
+        tile=particle['tile'], j=int(particle['yoge']), i=int(particle['xoge'])).values)
+    if 2 <= k <= 11:
+        if particle['month'] in [5,6,7,8,9,10]: # summer
+            if 45 <= lat <= 75 or -45 <= lat <= -30:
+                if random.random() < 0.8:
+                    kv *=1.2
+        else: # winter
+            if 32 <= lat <= 45 or -60 <= lat <= -40:
+                if random.random() < 0.8:
+                    kv *=1.2
+
+    # deep water wave could have more turbulance
+    # assuming 1% chance to get large wave
+    if 1 <= k <= 10 and random.random() < 0.01:
+        kv *= (1.0 + random.uniform(-1.5, 1.5))
+
+    # in south/north pole, uvel/vvel declines very quickly, so reduce the kvel
+    if particle['tile'] in [0,3,6,9,12,4,8,11]:
+        kv /= 3.0
+
+    particle['kvel'] = kv
+    return kv
+
+
+# uvel/vvel are updated based on ECCO dataset
+# kvel is updated based on various factors
 def update_velocities(ecco_ds, particle):
     if beached(ecco_ds, particle):
         particle['uvel'] = particle['vvel'] = particle['kvel'] = 0.
@@ -489,10 +541,8 @@ def update_velocities(ecco_ds, particle):
                                                i=int(particle['xoge']),
                                                tile=particle['tile']
                                               ).values)
-    particle['kvel'] = KVEL
-    # in south/north pole, uvel/vvel declines very quickly, so reduce the kvel
-    if particle['tile'] in [0,3,6,9,12,4,8,11]:
-        particle['kvel'] /= 3.0
+
+    update_kvel(ecco_ds, particle)
 
 def find_initial_position(results, id):
     columns = results[0]
@@ -552,7 +602,7 @@ def refresh_particle(particle, results):
             'xoge': result[xogeidx],
             'yoge': result[yogeidx],
             'k': 0,
-            'state': ''
+            'state': 'New'
         }
         logging.info(f" {particle['year']}/{particle['month']}"
                         f" Refresh {particle['id']}=>{new_particle['id']}"
@@ -582,7 +632,7 @@ def particle_position(ecco_ds, particle, results, fudge=0):
         return new_particle
 
     # If beached then refresh particle.
-    if beached(ecco_ds, particle):
+    elif beached(ecco_ds, particle):
         if particle['state'] != 'Beached':
             new_particle = refresh_particle(particle, results)
         particle['state'] = 'Beached'
@@ -800,10 +850,8 @@ def main(args):
 
 if __name__ == '__main__':
     args = usage()
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    loglevel = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(level=loglevel)
 
     if args.test:
         test(args)

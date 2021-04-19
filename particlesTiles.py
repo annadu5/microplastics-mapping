@@ -491,7 +491,7 @@ def update_velocities(ecco_ds, particle):
                                               ).values)
     particle['kvel'] = KVEL
     # in south/north pole, uvel/vvel declines very quickly, so reduce the kvel
-    if particle['tile'] in [0,3,6,9,12]:
+    if particle['tile'] in [0,3,6,9,12,4,8,11]:
         particle['kvel'] /= 3.0
 
 def find_initial_position(results, id):

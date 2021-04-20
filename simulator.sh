@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 FUN=${1:-"run"}
 shift
 
@@ -65,7 +64,16 @@ function plot_globe()
     [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
     if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
 
-    python3 ocean_particle_simulator.py $NAME.csv --only-plot --plot-all-lonlat $i
+    python3 ocean_particle_simulator.py $NAME.csv --only-plot --plot-all-lonlat
+}
+
+function plot_png_test()
+{
+    local NAME=${1%%.csv}
+    [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
+    if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
+
+    python3 ocean_particle_simulator.py $NAME.csv --only-plot --plot-all-lonlat --png-ym 2005:10
 }
 
 function tarit

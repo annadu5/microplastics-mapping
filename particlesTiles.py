@@ -686,11 +686,11 @@ def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     plt.ylim([0,90])
     plt.xlabel('x-dimension of u grid')
     plt.ylabel('y-dimension of v grid')
-    plt.title(f'Tile {tile} {year}-{str(month+1).zfill(2)}')
+    plt.title(f'Tile {tile} {year}-{(month+1):02}')
 
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
     for index, result in results_match.iterrows():
-        logging.debug(f'    {int(result.xoge)},{int(result.yoge)}')
+        logging.debug(f'  {result.tile}{int(result.xoge)},{int(result.yoge)}')
         plt.scatter(result.xoge, result.yoge, c=color_by_k(result.k))
     plt.tight_layout(pad=0)
 
@@ -775,7 +775,6 @@ def visualize(args, result_csv, years=[], months=[]):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
     count = 0
-    tiles = [10, 2]
     file_pattern, fext = os.path.splitext(result_csv)
     plot_years = years if years else results.year.unique()
     for year in np.sort(plot_years):
@@ -786,7 +785,7 @@ def visualize(args, result_csv, years=[], months=[]):
             if args.plot_all_lonlat:
                 plot_all_lonlat(ecco_ds, year, month, results, outfile)
             elif args.plot_all_tiles:
-                # TODO: ecco.plot_tiles
+                # TODO: use ecco.plot_tiles instead
                 plot_all_tiles(ecco_ds, year, month, results, outfile, k=0)
             else:
                 plot_1tile(ecco_ds, year, month, results, outfile, tile=args.plot_1tile)
@@ -801,7 +800,7 @@ def compute(args):
     particles = read_input(input_file)
 
     global KVEL
-    KVEL = args.kvel
+    KVEL = float(args.kvel)
 
     columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
     results = [columns]

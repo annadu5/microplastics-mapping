@@ -5,5 +5,7 @@ __pycache__/
 *.png
 *.mp4
 *.log
+*.tgz
 *.sh
 temp.sh
+ecco*/

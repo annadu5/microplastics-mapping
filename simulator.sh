@@ -56,14 +56,26 @@ function toZdrive
     [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
     NAME=${NAME%%".csv"}
     NAME=${NAME%%.mp4}
-    DST='/Volumes/Anna/2021 Science Fair/results'
-    for i in {0..100} ; do
-        [ -d "$DST/sample$i" ] && continue
-        DST="$DST/sample$i"
-        echo "$DST"
-        mkdir "$DST"
-        cp ${NAME}* "$DST"
-        break
+
+    local DST0='/Volumes/Anna/2021 Science Fair/results'
+    if [ x"$2" != x ] ; then
+        DST="$DST0/sample$2"
+    else
+        for i in {0..1000} ; do
+            [ -d "$DST0/sample$i" ] && continue
+            DST="$DST0/sample$i"
+            break
+        done
+    fi
+    [ x"DST" = x ] && echo "Cannot find dst" >&2 && exit 1
+
+    echo "$DST"
+    [ ! -d "$DST" ] && mkdir "$DST"
+    cp ${NAME}* "$DST"
+    for tile in {0..12} ; do
+        if [ -f $tile/${NAME}.mp4 ] ; then
+            cp $tile/${NAME}.mp4 "${DST}/${NAME}_t${tile}.mp4"
+        fi
     done
 }
 
@@ -81,7 +93,7 @@ function plot_tiles()
         [ ! -d $i ] && mkdir $i
         cp $NAME.csv $i/$NAME.csv
         python3 ocean_particle_simulator.py $i/$NAME.csv --only-plot --plot-1tile $i &
-        mv $i/$NAME.mp4 ${NAME}_t$i.mp4
+        # mv $i/$NAME.mp4 ${NAME}_t$i.mp4
     done
 
 }

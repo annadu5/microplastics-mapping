@@ -606,8 +606,8 @@ def refresh_particle(particle, results):
             'state': 'New'
         }
         logging.info(f" {particle['year']}/{particle['month']}"
-                        f" Refresh {particle['id']}=>{new_particle['id']}"
-                        f" {result[tileidx]}:{result[xogeidx]},{result[yogeidx]}")
+                        f" Refresh {particle['id']} => {new_particle['id']:}"
+                        f" {result[tileidx]},{int(result[xogeidx])},{int(result[yogeidx])}")
         return new_particle
     else: # beached from beginning, or something wrong
         return None

@@ -502,11 +502,11 @@ def update_kvel(ecco_ds, particle):
         if particle['month'] in [5,6,7,8,9,10]: # summer
             if 45 <= lat <= 75 or -45 <= lat <= -30:
                 if random.random() < 0.8:
-                    kv *=1.2
+                    kv *=10
         else: # winter
             if 32 <= lat <= 45 or -60 <= lat <= -40:
                 if random.random() < 0.8:
-                    kv *=1.2
+                    kv *=10
 
     # deep water wave could have more turbulance
     # assuming 1% chance to get large wave
@@ -514,8 +514,8 @@ def update_kvel(ecco_ds, particle):
         kv *= (1.0 + random.uniform(-1.5, 1.5))
 
     # in south/north pole, uvel/vvel declines very quickly, so reduce the kvel
-    if particle['tile'] in [0,3,6,9,12,4,8,11]:
-        kv /= 3.0
+    # if particle['tile'] in [0,3,6,9,12,4,8,11]:
+    #     kv /= 3.0
 
     particle['kvel'] = kv
     return kv

@@ -687,7 +687,7 @@ def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     plt.ylim([0,90])
     plt.xlabel('x-dimension of u grid')
     plt.ylabel('y-dimension of v grid')
-    plt.title(f'Tile {tile} {year}-{(month+1):02}')
+    plt.title(f'Anna Du Ocean Particle Simulator\nTile {tile} {year}-{(month+1):02}')
 
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
     xoges, yoges, colors = [], [], []
@@ -703,7 +703,7 @@ def plot_all_tiles(ecco_ds, year, month, results, outfile, k=0):
     logging.info(f'k={k}, tiles=all, {year}-{month}, {outfile}')
     tiles = range(13)
     fig = plt.figure(figsize=(30,30))
-    plt.title(f'{year}-{month+1}')
+    plt.title(f'Anna Du Ocean Particle Simulator\n{year}-{month+1:02}')
     grid5x5 = {0:21, 1:16, 2:11, 3:22, 4:17, 5:12, 6:7, 7:8, 8:9, 9:10, 10:3, 11:4, 12:5}
     for tile in tiles:
         fig = plt.subplot(5,5,grid5x5[tile])
@@ -735,7 +735,11 @@ def plot_all_lonlat(ecco_ds, year, month, results, outfile):
                 plot_type = 'pcolormesh', projection_type = 'PlateCarree',
                 cmap='jet', dx=1, dy=1, show_colorbar=True,
                 cmin=-0.25, cmax=0.25)
-    plt.title(f"Anna Du ECCO UVEL {year}-{month+1}")
+    plt.xlim([-180,180])
+    plt.ylim([-90,90])
+    plt.xlabel('Longitue')
+    plt.ylabel('Latitude')
+    plt.title(f"Anna Du Ocean Particle Simulator\n{year}-{month+1:02}")
 
     results_match = results[(results.year == year) & (results.month == month)]
     lons, lats, colors = [], [], []

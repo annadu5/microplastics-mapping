@@ -13,14 +13,35 @@ function set_anaconda
     if ! which conda >/dev/null 2>&1 ; then return 1 ; fi
 }
 
+function latest_file
+{
+    local ext=${1#.}
+    [ x"$ext" != x ] && dotext=".$ext"
+    ls -t *$dotext | head -1
+}
+
+function ask_latest_file
+{
+    filename=$(latest_file $*)
+    if [ x"$filename" != x ] ; then
+        ls -l $filename ; date ; echo
+        echo "Is $filename the right file? [y/n]"
+        read reply
+        if [ $reply = Y ] || [ $reply = y ] || [ $reply = Yes ] || [ $reply = yes ] ; then
+            LATEST_FILE=$filename
+        fi
+    fi
+}
+
+
 function simulate
 {
     NAME=${1:-"input-1027p"}
     NAME=${NAME%%.csv}
-    KVEL=${2:-"0.2"}
-    FUDGE=${3:-"30"}
+    [ x"$2" != x ] && KVEL_ARG="--kvel $2"
+    [ x"$3" != x ] && FUDGE_ARG="--fudge-pct $3"
     if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
-    python3 ocean_particle_simulator.py ${NAME}.csv --plot-all-lonlat --kvel $KVEL --fudge-pct $FUDGE | tee results_${NAME}.log
+    python3 ocean_particle_simulator.py ${NAME}.csv --plot-all-lonlat $KVEL_ARG $FUDGE_ARG | tee results_${NAME}.log
 }
 
 function help
@@ -30,9 +51,11 @@ function help
 
 function toZdrive
 {
-    NAME=${1%%.csv}
-    NAME=${NAME%%.mp4}
+    local NAME=${1}
+    [ x"$NAME" = x ] && ask_latest_file csv && NAME=$LATEST_FILE
     [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
+    NAME=${NAME%%".csv"}
+    NAME=${NAME%%.mp4}
     DST='/Volumes/Anna/2021 Science Fair/results'
     for i in {0..100} ; do
         [ -d "$DST/sample$i" ] && continue
@@ -46,9 +69,14 @@ function toZdrive
 
 function plot_tiles()
 {
-    NAME=${1:-"results/results_input-1515p_f30kv0.25"}
-    NAME=${1%%.csv}
-    if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
+    NAME=${1}
+    [ x"$NAME" = x ] && ask_latest_file csv && NAME=$LATEST_FILE
+    [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <csvfile> " && exit 1
+    NAME=${NAME%%.csv}
+    # echo $NAME
+
+    if ! set_anaconda ; then echo "cannot find anaconda" >&2 ; return 1 ; fi
+
     for i in {0..12} ; do
         [ ! -d $i ] && mkdir $i
         cp $NAME.csv $i/$NAME.csv
@@ -60,18 +88,22 @@ function plot_tiles()
 
 function plot_globe()
 {
-    local NAME=${1%%.csv}
+    local NAME=${1}
+    [ x"$NAME" = x ] && ask_latest_file csv && NAME=$LATEST_FILE
     [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
-    if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
+    NAME=${NAME%%".csv"}
+    if ! set_anaconda ; then echo "cannot find anaconda" >&2 ; return 1 ; fi
 
     python3 ocean_particle_simulator.py $NAME.csv --only-plot --plot-all-lonlat
 }
 
 function plot_png_test()
 {
-    local NAME=${1%%.csv}
+    local NAME=${1}
+    [ x"$NAME" = x ] && ask_latest_file csv && NAME=$LATEST_FILE
     [ x"$NAME" = x ] && echo "$0 ${FUNCNAME[0]} <name>" && exit 1
-    if ! set_anaconda ; then echo "can't find anaconda" >&2 ; return 1 ; fi
+    NAME=${NAME%%".csv"}
+    if ! set_anaconda ; then echo "cannot find anaconda" >&2 ; return 1 ; fi
 
     python3 ocean_particle_simulator.py $NAME.csv --only-plot --plot-all-lonlat --png-ym 2005:10
 }

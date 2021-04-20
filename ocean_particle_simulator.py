@@ -734,6 +734,7 @@ def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     ecco.plot_proj_to_latlon_grid(ecco_ds.XC, ecco_ds.YC, tile_to_plot,
                 plot_type = 'pcolormesh', projection_type = 'PlateCarree',
                 cmap='jet', dx=1, dy=1, show_colorbar=True,
+                show_grid_labels=True,
                 cmin=-0.25, cmax=0.25)
     plt.xlim([-180,180])
     plt.ylim([-90,90])

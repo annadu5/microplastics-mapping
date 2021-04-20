@@ -82,6 +82,7 @@ def usage():
     parser.add_argument('--test', action='store_true', help='Test Mode')
     parser.add_argument('--only-plot', action='store_true', help='Only Plot')
     parser.add_argument('--png-ym', help='year:month')
+    parser.add_argument('--keep-png', action='store_true', help='year:month')
     plot_group = parser.add_mutually_exclusive_group()
     plot_group.add_argument('--plot-1tile', type=int, default=10)
     plot_group.add_argument('--plot-all-tiles', action='store_true', help='Plot all tiles by tiles')
@@ -689,9 +690,13 @@ def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     plt.title(f'Tile {tile} {year}-{(month+1):02}')
 
     results_match = results[(results.year == year) & (results.month == month) & (results.tile == tile)]
+    xoges, yoges, colors = [], [], []
     for index, result in results_match.iterrows():
         logging.debug(f'  {result.tile}{int(result.xoge)},{int(result.yoge)}')
-        plt.scatter(result.xoge, result.yoge, c=color_by_k(result.k))
+        xoges.append(result.xoge)
+        yoges.append(result.yoge)
+        colors.append(color_by_k(result.k))
+    plt.scatter(xoges, yoges, c=colors)
     plt.tight_layout(pad=0)
 
 def plot_all_tiles(ecco_ds, year, month, results, outfile, k=0):
@@ -733,10 +738,14 @@ def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     plt.title(f"Anna Du ECCO UVEL {year}-{month+1}")
 
     results_match = results[(results.year == year) & (results.month == month)]
+    lons, lats, colors = [], [], []
     for index, result in results_match.iterrows():
         lon, lat = lon_lat(ecco_ds, result.tile, result.xoge, result.yoge)
         logging.debug(f' {result.tile},{int(result.xoge)},{int(result.yoge)} => ({lon},{lat})')
-        plt.scatter(lon, lat, c=color_by_k(result.k))
+        lons.append(lon)
+        lats.append(lat)
+        colors.append(color_by_k(result.k))
+    plt.scatter(lons, lats, c=colors)
 
     plt.savefig(outfile)
     return outfile
@@ -792,7 +801,7 @@ def visualize(args, result_csv, years=[], months=[]):
             count += 1
     
     if not (years and months):
-        gen_mp4(file_pattern, keep_png=args.debug)
+        gen_mp4(file_pattern, keep_png=args.keep_png)
 
 
 def compute(args):

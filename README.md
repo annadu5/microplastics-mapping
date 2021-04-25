@@ -11,7 +11,7 @@ This is my science project to simulate microplastics movement in the ocean envir
 ![Global Example](img/sample29_global.gif)
 
 ### Single Tile Video
-| Tile 10 | Tile 2 |
+| Tile 13 | Tile 3 |
 |---------|--------|
 | ![Single Tile Example: Tile 10](img/sample9_tile10.gif) | ![Single Tile Example: Tile 2](img/sample29_tile2.gif) |
 

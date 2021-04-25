@@ -19,6 +19,7 @@ This is my science project to simulate microplastics movement in the ocean envir
 ### Input file
 
 The simulator takes an input file that specifies inital particle location in `.csv` format. Each row represents a particle with format of `tile,x,y,k` where k can be omitted (by default 0), where tile is 0-12, x and y are 1-89 and k is 0-49. See [ECCO Illustration](https://ecco-group.org/images/ecco_tiles.png)
+[![ECCO Illustration](https://ecco-group.org/images/ecco_tiles.png)](https://ecco-group.org/analysis-tools.htm)
 
 ### Simulate 1027 particles and plot the global map
 

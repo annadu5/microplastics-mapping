@@ -4,6 +4,16 @@
 
 This is my science project to simulate microplastics movement in the ocean environment. The work is based on [NASA's ECCO Dataset](https://data.nas.nasa.gov/ecco/).
 
+## Examples
+
+### Single Tile Video
+
+![Single Tile Example](https://youtu.be/K1elziFNw8M)
+
+### Global Video
+
+![Global Example](https://youtu.be/m9QDrXRAdtM)
+
 ## Install
 
 ### Prerequisite

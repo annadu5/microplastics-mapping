@@ -18,6 +18,10 @@ import logging
 import argparse
 from subprocess import run
 
+# Local NASA ECCO python package.
+# By default ECCOv4-py is in home directory
+# If not then specify in PYTHONPATH environment variable
+# https://ecco-v4-python-tutorial.readthedocs.io/Installing_Python_and_Python_Packages.html
 sys.path.append(f'{os.path.expanduser("~")}/ECCOv4-py')
 try:
     import ecco_v4_py as ecco
@@ -39,6 +43,9 @@ def next_particle_id():
     particle_id += 1
     return index
 
+# Specify where ECCO data set is. By default it's in ~/eccodata
+# https://ecco-v4-python-tutorial.readthedocs.io/Downloading_the_ECCO_v4_state_estimate.html
+# Currently use Version 4 Release 4
 def configure_base_dir(base_dir=None):
     eccodata_dir = ''
     if base_dir and os.path.isdir(base_dir):
@@ -55,6 +62,8 @@ def configure_base_dir(base_dir=None):
     return eccodata_dir
 
 
+# Load ECCO dataset to memory by the year
+# This is the most memory and CPU intensive operations, call it as less as possible
 def load_ecco_ds(year, base_dir, vars=['UVEL', 'VVEL']):
     # ECCO_dir = base_dir + '/Version4/Release3_alt'
     ECCO_dir = base_dir + '/Version4/Release4'
@@ -80,7 +89,9 @@ def usage():
     parser.add_argument('--fudge-pct', type=int, default=30, help='Percentage of factor to disturb')
     parser.add_argument('--debug', action='store_true', help='Debug Mode')
     parser.add_argument('--test', action='store_true', help='Test Mode')
-    parser.add_argument('--only-plot', action='store_true', help='Only Plot')
+    action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument('--only-plot', action='store_true', help='Only Plot')
+    action_group.add_argument('--only-compute', action='store_true', help='Only output results csv')
     parser.add_argument('--png-ym', help='year:month')
     parser.add_argument('--keep-png', action='store_true', help='year:month')
     plot_group = parser.add_mutually_exclusive_group()
@@ -94,10 +105,14 @@ def usage():
     args = parser.parse_args()
     return args
 
+####################################################
+# Compute Section
+####################################################
 
+
+# Check if (x,y) is within the 90x90 tile.
 def outOfTile(x,y):
     if y < 0:
-        # anything else?
         return True
     elif y >= 90:
         return True
@@ -108,6 +123,9 @@ def outOfTile(x,y):
     else:
         return False
 
+# A particle may move from one tile to another,
+# this function converts coordinates between tiles
+# Return: (newtile, newx, newy)
 def adjustTile(tile, ix, jy):
     newtile, newi, newj = tile, ix, jy
     if (ix < 0) and (jy >= 90): # top left
@@ -342,6 +360,7 @@ def get_hfacw(ecco_ds, tile, xi, yj, k):
     hfacw = float(ecco_ds.hFacW.isel(k=int(k), tile=tile, i_g=int(xi), j=int(yj)).values)
     return hfacw
 
+# Use hFacW to check whether one position is beached.
 # Call beached(ecco_ds, particle) or beached(ecco_ds, tile, xoge, yoge, k)
 def beached(ecco_ds, tile_or_particle, xoge=None, yoge=None, k=None):
     if type(tile_or_particle) == int:
@@ -359,6 +378,7 @@ def beached(ecco_ds, tile_or_particle, xoge=None, yoge=None, k=None):
     return int(hfacw) == 0
 
 
+# Disturb with exponential algorithm, i.e. small flucuation may result big disturbance
 def disturb_exp(uvel, vvel, ix, jy, fudge):
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
@@ -375,6 +395,7 @@ def disturb_exp(uvel, vvel, ix, jy, fudge):
     dy = yfactor * vvel * MPS_TO_DEG_PER_MONTH
     return dx, dy
 
+# Simple disturbance propotional to uvel/vvel
 def disturb_simple(uvel, vvel, kvel, fudge):
     xfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
     yfactor = random.uniform(-1.0, 1.0) * float(fudge) / 100.0
@@ -438,6 +459,7 @@ def move_1month(ecco_ds, particle, fudge=0, retry=0):
     particle['xoge'], particle['yoge'], particle['k'] = newx, newy, newk
 
 
+# Read input file in format of tile,x,y,k
 # default tile is 10, default k is 0
 def read_input(input_file, tile=10, k=0):
     locations = pd.read_csv(input_file)
@@ -454,6 +476,7 @@ def read_input(input_file, tile=10, k=0):
     return particles
 
 
+# Write results of every particle every month to the disk
 def write_results(input_file, results, extra=''):
     # output path is adds results_ to input file name
     input_dir = os.path.dirname(input_file)
@@ -475,6 +498,7 @@ def write_results(input_file, results, extra=''):
     return output_path
 
 
+# Update kvel by 1 month
 # velocity on k is influences by various factors
 def update_kvel(ecco_ds, particle):
     k = particle['k']
@@ -555,6 +579,7 @@ def find_initial_position(results, id):
     else:
         return None
 
+# Find a random initial particle within the tile
 def find_random_in_tile(results, tile):
     tile_initial_list = []
     columns = results[0]
@@ -574,6 +599,10 @@ def find_random_in_tile(results, tile):
         return None
 
 
+# After the particle is beached, it can choose between
+# - no refreshing new particle
+# - refresh new particle from initial location
+# - refresh a random particle from the tile
 def refresh_particle(particle, results):
     # Don't add new particles in later years
     if particle['year'] >= 2005:
@@ -619,6 +648,7 @@ def add_to_results(particle, results):
     results.append(result)
 
 
+# Compute particle position of the month, and prepare for the next month
 def particle_position(ecco_ds, particle, results, fudge=0):
     # When calling this function, expect the particle to be up-to-date
     # on positions, i.e. index, tile, xoge, yoge, k, and year, month,
@@ -663,6 +693,36 @@ def hypot(uvel_ds, vvel_ds):
     vel_ds = uvel_ds
     return vel_ds
 
+# Main function to compute the simulation, and write to results_xxx.csv file
+def compute(args):
+    input_file = args.inputfile
+    particles = read_input(input_file)
+
+    global KVEL
+    KVEL = float(args.kvel)
+
+    columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
+    results = [columns]
+    base_dir = configure_base_dir()
+    for year in range(args.from_year, args.to_year+1):
+        ecco_ds = load_ecco_ds(int(year), base_dir)
+        for month in range(12):
+            for particle in particles:
+                particle['year'] = year
+                particle['month'] = month
+                new_particle = particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
+                if new_particle:
+                    particles.append(new_particle)
+    extra_info = f'f{args.fudge_pct}kv{args.kvel}'
+    result_file = write_results(input_file, results, extra=extra_info)
+    return result_file
+
+####################################################
+# Plot Section
+####################################################
+
+# Decide particle color by its k layer:
+# Surface particle (k=0) is blue, k=49 is red
 # https://matplotlib.org/stable/tutorials/colors/colors.html
 def color_by_k(k):
     # return str(k*5/255.)
@@ -676,6 +736,7 @@ def color_by_k(k):
     color = f'#{rr}{gg}{bb}'
     return color
 
+# Plot a single tile on year and month, based on results
 def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     uvel_ds = ecco_ds.UVEL.isel(tile=tile, time=month, k=kplot)
     # vvel_ds = ecco_ds.VVEL.isel(tile=tile, time=month, k=kplot)
@@ -699,6 +760,8 @@ def plot_tile(ecco_ds, tile, year, month, results, kplot=0):
     plt.scatter(xoges, yoges, c=colors)
     plt.tight_layout(pad=0)
 
+# Plot all tiles using the NASA layout
+# https://ecco-group.org/images/ecco_tiles.png
 def plot_all_tiles(ecco_ds, year, month, results, outfile, k=0):
     logging.info(f'k={k}, tiles=all, {year}-{month}, {outfile}')
     tiles = range(13)
@@ -712,6 +775,7 @@ def plot_all_tiles(ecco_ds, year, month, results, outfile, k=0):
     # plt.show()
     return outfile
 
+# Plot a single tile of year-month and save to disk
 def plot_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     logging.info(f'k={k}, tile={tile}, {year}-{month}, {outfile}')
     fig = plt.figure(figsize = (9,9))
@@ -720,12 +784,14 @@ def plot_1tile(ecco_ds, year, month, results, outfile, tile=10, k=0):
     return outfile
 
 
+# convert (tile, x, y) to (longitude, latitude)
 def lon_lat(ecco_ds, tile, i, j):
     lon = float(ecco_ds.XC.isel(tile=tile, j=int(j), i=int(i)).values)
     lat = float(ecco_ds.YC.isel(tile=tile, j=int(j), i=int(i)).values)
     return lon, lat
 
 
+# Plot the global map with longitude-latitude
 def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     logging.info(f'{year}-{month}, {outfile}')
     fig = plt.figure(figsize=(30,15))
@@ -756,13 +822,14 @@ def plot_all_lonlat(ecco_ds, year, month, results, outfile):
     return outfile
 
 
+# Rotate the previous results csv and mp4 files
 def rotate_files(file_pattern):
     file_mp4 = file_pattern+'.mp4'
     file_csv = file_pattern+'.csv'
     if (not os.path.exists(file_mp4)) and (not os.path.exists(file_csv)):
         return
 
-    for i in range(100):
+    for i in range(1000):
         mp4_backup = f'{file_pattern}_{i}.mp4'
         csv_backup = f'{file_pattern}_{i}.csv'
         if (not os.path.exists(mp4_backup)) and (not os.path.exists(csv_backup)):
@@ -775,6 +842,7 @@ def rotate_files(file_pattern):
             break
 
 
+# Generate mp4 file with ffmpeg
 def gen_mp4(file_pattern, keep_png=False):
     # rotate_files(file_pattern)
     cmd = f'ffmpeg -r 24 -f image2 -s 1920x1080 -i {file_pattern}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p -y {file_pattern}.mp4'
@@ -785,6 +853,8 @@ def gen_mp4(file_pattern, keep_png=False):
     logging.info(f' Generated {file_pattern}.mp4')
 
 
+# Main function to plot the result
+# Takes results csv from compute() to plot the video
 def visualize(args, result_csv, years=[], months=[]):
     base_dir = configure_base_dir()
     results = pd.read_csv(result_csv)
@@ -809,29 +879,7 @@ def visualize(args, result_csv, years=[], months=[]):
         gen_mp4(file_pattern, keep_png=args.keep_png)
 
 
-def compute(args):
-    input_file = args.inputfile
-    particles = read_input(input_file)
-
-    global KVEL
-    KVEL = float(args.kvel)
-
-    columns = ['id', 'year', 'month', 'tile', 'xoge', 'yoge', 'k', 'uvel', 'vvel', 'kvel', 'state']
-    results = [columns]
-    base_dir = configure_base_dir()
-    for year in range(args.from_year, args.to_year+1):
-        ecco_ds = load_ecco_ds(int(year), base_dir)
-        for month in range(12):
-            for particle in particles:
-                particle['year'] = year
-                particle['month'] = month
-                new_particle = particle_position(ecco_ds, particle, results, fudge=args.fudge_pct)
-                if new_particle:
-                    particles.append(new_particle)
-    extra_info = f'f{args.fudge_pct}kv{args.kvel}'
-    result_file = write_results(input_file, results, extra=extra_info)
-    return result_file
-
+# Test function
 def test(args):
     base_dir = configure_base_dir()
     result_csv = args.inputfile
@@ -847,6 +895,7 @@ def test(args):
     plot_all_tiles(ecco_ds, year, month, results, outfile, k=0)
 
 
+# main entry point
 def main(args):
     if args.only_plot:
         result_file = args.inputfile
@@ -858,7 +907,8 @@ def main(args):
         y,m = args.png_ym.split(':')
         years = [int(y)]
         months = [int(m)-1]
-    visualize(args, result_file, years=years, months=months)
+    if not args.only_compute:
+        visualize(args, result_file, years=years, months=months)
 
 
 if __name__ == '__main__':
